@@ -1,6 +1,6 @@
 {
-  "name": "Conversor de Áudio",
-  "description": "Conversor de áudio diretamente no navegador com saída MP3 de 96 kbps e 44.100 Hz.",
+  "name": "SomLeve 96",
+  "description": "Converta seus arquivos de áudio para MP3 96 kbps de forma rápida, leve e segura, diretamente no seu dispositivo.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

@@ -577,10 +577,10 @@ export default function App() {
             </div>
             <div>
               <h1 className="font-display font-bold text-lg tracking-tight text-slate-100" id="header-title">
-                Conversor de Áudio Grátis
+                SomLeve 96
               </h1>
               <p className="text-xs text-slate-400 font-medium" id="header-subtitle">
-                Otimizador de Áudio para Compositores
+                Conversor de Áudio Grátis
               </p>
             </div>
           </div>
@@ -902,10 +902,10 @@ export default function App() {
           
           <div className="text-center max-w-2xl mx-auto space-y-2">
             <h3 className="font-display text-xl md:text-2xl font-bold tracking-tight text-emerald-400" id="benefits-title">
-              Áudio mais leve para tocar melhor no SomDrive
+              Áudio mais leve com o SomLeve 96
             </h3>
             <p className="text-xs md:text-sm text-slate-400 leading-relaxed" id="benefits-subtitle">
-              Converta seus arquivos para MP3 96 kbps e deixe suas músicas mais leves, mais rápidas para carregar e mais fáceis de ouvir dentro do SomDrive.
+              Converta seus arquivos de áudio para MP3 96 kbps e deixe suas músicas muito mais leves, rápidas para carregar e fáceis de tocar em qualquer dispositivo ou plataforma de armazenamento como o SomDrive.
             </p>
           </div>
 
@@ -979,7 +979,7 @@ export default function App() {
       <footer className="border-t border-slate-900/40 bg-slate-950 py-6 px-4 md:px-8">
         <div className="max-w-5xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4 text-xs text-slate-500 text-center md:text-left">
           <p id="footer-text-left">
-            &copy; {new Date().getFullYear()} Conversor de Áudio Local. Processado 100% no seu navegador.
+            &copy; {new Date().getFullYear()} SomLeve 96. Processado 100% local no seu navegador.
           </p>
           <div className="flex items-center space-x-4" id="footer-links">
             <span className="flex items-center space-x-1.5" id="footer-link-tech">
