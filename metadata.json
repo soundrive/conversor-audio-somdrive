@@ -1,0 +1,6 @@
+{
+  "name": "Conversor de Áudio",
+  "description": "Conversor de áudio diretamente no navegador com saída MP3 de 96 kbps e 44.100 Hz.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
