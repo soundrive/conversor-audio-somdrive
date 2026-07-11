@@ -1,0 +1,18 @@
+PACOTE DE FAVICON — SOMLEVE 96
+
+1. Copie TODOS estes arquivos para a pasta public do projeto.
+2. Abra o arquivo index.html.
+3. Dentro da tag <head>, cole o conteúdo do arquivo COLE-NO-INDEX-HTML.txt.
+4. Apague links antigos de favicon para evitar conflito.
+5. Salve, execute o projeto novamente e faça uma atualização forçada:
+   Windows: Ctrl + F5
+   Mac: Cmd + Shift + R
+
+Arquivos incluídos:
+- favicon.ico
+- favicon-16x16.png
+- favicon-32x32.png
+- apple-touch-icon.png
+- android-chrome-192x192.png
+- android-chrome-512x512.png
+- site.webmanifest
