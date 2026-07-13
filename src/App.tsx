@@ -572,12 +572,36 @@ export default function App() {
       <header className="border-b border-slate-900/60 bg-slate-950/80 backdrop-blur-md sticky top-0 z-50 px-4 py-4 md:px-8">
         <div className="max-w-5xl mx-auto flex items-center justify-between">
           <div className="flex items-center space-x-3">
-            <div className="p-2.5 bg-emerald-500/10 rounded-xl border border-emerald-500/20 text-emerald-400">
-              <Volume2 className="h-6 w-6 animate-pulse" id="logo-icon" />
+            <div className="flex-shrink-0">
+              <svg viewBox="0 0 100 100" className="h-10 w-10 text-emerald-400" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" id="logo-icon">
+                {/* Quadrado Arredondado Externo */}
+                <rect x="6" y="6" width="88" height="88" rx="24" strokeWidth="6" className="text-emerald-500/80" />
+                
+                {/* Linhas verticais do centro */}
+                <line x1="50" y1="28" x2="50" y2="72" strokeWidth="6.5" className="text-emerald-400" />
+                <line x1="41" y1="38" x2="41" y2="62" strokeWidth="6" className="text-emerald-400/80" />
+                <line x1="59" y1="38" x2="59" y2="62" strokeWidth="6" className="text-emerald-400/80" />
+                
+                {/* Lado Esquerdo */}
+                {/* Arco Interno */}
+                <path d="M 32 42 A 10 10 0 0 0 32 58" strokeWidth="4" className="text-emerald-400/70" />
+                {/* Ponto */}
+                <circle cx="23" cy="50" r="3" fill="currentColor" stroke="none" className="text-emerald-400/80" />
+                {/* Arco Externo */}
+                <path d="M 14 36 A 20 20 0 0 0 14 64" strokeWidth="4" className="text-emerald-400/50" />
+                
+                {/* Lado Direito */}
+                {/* Arco Interno */}
+                <path d="M 68 42 A 10 10 0 0 1 68 58" strokeWidth="4" className="text-emerald-400/70" />
+                {/* Ponto */}
+                <circle cx="77" cy="50" r="3" fill="currentColor" stroke="none" className="text-emerald-400/80" />
+                {/* Arco Externo */}
+                <path d="M 86 36 A 20 20 0 0 1 86 64" strokeWidth="4" className="text-emerald-400/50" />
+              </svg>
             </div>
             <div>
               <h1 className="font-display font-bold text-lg tracking-tight text-slate-100" id="header-title">
-                SomLeve 96
+                Som Leve
               </h1>
               <p className="text-xs text-slate-400 font-medium" id="header-subtitle">
                 Conversor de Áudio Grátis
@@ -902,7 +926,7 @@ export default function App() {
           
           <div className="text-center max-w-2xl mx-auto space-y-2">
             <h3 className="font-display text-xl md:text-2xl font-bold tracking-tight text-emerald-400" id="benefits-title">
-              Áudio mais leve com o SomLeve 96
+              Áudio mais leve com o Som Leve
             </h3>
             <p className="text-xs md:text-sm text-slate-400 leading-relaxed" id="benefits-subtitle">
               Converta seus arquivos de áudio para MP3 96 kbps e deixe suas músicas muito mais leves, rápidas para carregar e fáceis de tocar em qualquer dispositivo ou plataforma de armazenamento como o SomDrive.
@@ -979,7 +1003,7 @@ export default function App() {
       <footer className="border-t border-slate-900/40 bg-slate-950 py-6 px-4 md:px-8">
         <div className="max-w-5xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4 text-xs text-slate-500 text-center md:text-left">
           <p id="footer-text-left">
-            &copy; {new Date().getFullYear()} SomLeve 96. Processado 100% local no seu navegador.
+            &copy; {new Date().getFullYear()} Som Leve. Processado 100% local no seu navegador.
           </p>
           <div className="flex items-center space-x-4" id="footer-links">
             <span className="flex items-center space-x-1.5" id="footer-link-tech">

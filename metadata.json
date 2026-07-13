@@ -1,5 +1,5 @@
 {
-  "name": "SomLeve 96",
+  "name": "Som Leve",
   "description": "Converta seus arquivos de áudio para MP3 96 kbps de forma rápida, leve e segura, diretamente no seu dispositivo.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
