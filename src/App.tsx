@@ -170,6 +170,51 @@ function checkMp4Audio(arrayBuffer: ArrayBuffer): { hasAudio: boolean; hasVideo:
   return { hasAudio, hasVideo };
 }
 
+// Helper function to check if an MPEG/MPG file contains an audio stream
+function checkMpegAudio(arrayBuffer: ArrayBuffer): { hasAudio: boolean; hasVideo: boolean } {
+  const view = new DataView(arrayBuffer);
+  const len = arrayBuffer.byteLength;
+  let hasAudio = false;
+  let hasVideo = false;
+
+  // Scan the file for pack headers or stream IDs to find audio streams
+  // Scan up to 10MB to keep search extremely fast and lightweight
+  const scanLimit = Math.min(len, 10 * 1024 * 1024);
+
+  for (let i = 0; i < scanLimit - 4; i++) {
+    // Look for MPEG start code prefix 0x000001
+    if (view.getUint8(i) === 0x00 && view.getUint8(i + 1) === 0x00 && view.getUint8(i + 2) === 0x01) {
+      const streamId = view.getUint8(i + 3);
+      // Stream IDs 0xC0 to 0xDF are MPEG Audio Streams
+      if (streamId >= 0xC0 && streamId <= 0xDF) {
+        hasAudio = true;
+      }
+      // Stream IDs 0xE0 to 0xEF are MPEG Video Streams
+      else if (streamId >= 0xE0 && streamId <= 0xEF) {
+        hasVideo = true;
+      }
+
+      if (hasAudio && hasVideo) {
+        break;
+      }
+    }
+  }
+
+  // Fallback: If no PS audio stream found, scan for MPEG Audio Frame Syncwords (e.g., MP3 or MP2 frame headers 0xFFE / 0xFFF)
+  if (!hasAudio) {
+    for (let i = 0; i < scanLimit - 2; i++) {
+      const byte1 = view.getUint8(i);
+      const byte2 = view.getUint8(i + 1);
+      if (byte1 === 0xFF && (byte2 & 0xE0) === 0xE0) {
+        hasAudio = true;
+        break;
+      }
+    }
+  }
+
+  return { hasAudio, hasVideo };
+}
+
 interface QueueItem {
   id: string;
   file: File;
@@ -200,7 +245,7 @@ export default function App() {
   const isCancelledRef = useRef<boolean>(false);
 
   // Supported extensions
-  const allowedExtensions = ["wav", "mp3", "mp4", "m4a", "aac", "flac", "ogg", "webm"];
+  const allowedExtensions = ["wav", "mp3", "mp4", "mpeg", "mpg", "m4a", "aac", "flac", "ogg", "webm"];
 
   // Provisional Limits
   const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
@@ -502,6 +547,24 @@ export default function App() {
           }
         }
 
+        const isMpeg = currentItem.file.name.toLowerCase().endsWith(".mpeg") || 
+                       currentItem.file.name.toLowerCase().endsWith(".mpg") || 
+                       currentItem.file.type.includes("mpeg");
+        
+        if (isMpeg) {
+          try {
+            const arrayBuffer = await currentItem.file.arrayBuffer();
+            const mpegInfo = checkMpegAudio(arrayBuffer);
+            if (!mpegInfo.hasAudio) {
+              customMessage = "Este arquivo MPEG não possui uma faixa de áudio válida.";
+            } else {
+              customMessage = "Este arquivo MPEG contém um formato de áudio que o navegador não conseguiu interpretar.";
+            }
+          } catch (e) {
+            customMessage = "Este arquivo MPEG contém um formato de áudio que o navegador não conseguiu interpretar.";
+          }
+        }
+
         setQueue((prev) => prev.map((q, idx) => idx === i ? { 
           ...q, 
           status: "erro", 
@@ -747,7 +810,7 @@ export default function App() {
                 type="file" 
                 multiple
                 className="hidden" 
-                accept=".wav,.mp3,.mp4,.m4a,.aac,.flac,.ogg,.webm,audio/*,video/mp4,application/mp4"
+                accept=".wav,.mp3,.mp4,.mpeg,.mpg,.m4a,.aac,.flac,.ogg,.webm,audio/*,video/mp4,application/mp4,video/mpeg,audio/mpeg,application/mpeg"
                 onChange={handleChange}
               />
               
@@ -760,7 +823,7 @@ export default function App() {
                   Clique ou arraste de 1 até 15 arquivos de áudio
                 </p>
                 <p className="text-xs text-slate-500" id="upload-text-sub">
-                  Suporta WAV, MP3, MP4, M4A, AAC, FLAC, OGG e WEBM de até 50 MB cada.
+                  Suporta WAV, MP3, MP4, MPEG, MPG, M4A, AAC, FLAC, OGG e WEBM de até 50 MB cada.
                 </p>
               </div>
             </form>
