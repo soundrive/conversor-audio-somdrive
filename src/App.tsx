@@ -23,6 +23,7 @@ import {
   ArrowRight
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
+import { zipSync } from "fflate";
 
 // Web Worker code as a string to run the LameJS encoder in a background thread
 const workerCode = `
@@ -191,6 +192,8 @@ export default function App() {
   const [currentProcessingIndex, setCurrentProcessingIndex] = useState<number>(-1);
   const [globalError, setGlobalError] = useState<string | null>(null);
   const [dragActive, setDragActive] = useState<boolean>(false);
+  const [isGeneratingZip, setIsGeneratingZip] = useState<boolean>(false);
+  const [zipWarningType, setZipWarningType] = useState<"none" | "warning-50" | "warning-100">("none");
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const activeWorkerRef = useRef<Worker | null>(null);
@@ -554,6 +557,87 @@ export default function App() {
     ? Math.round(((totalOriginalBytes - totalConvertedBytes) / totalOriginalBytes) * 100)
     : 0;
 
+  // Download all completed files in a single ZIP file (local-only, fflate level 0 store-only)
+  const handleDownloadAllZip = async (force = false) => {
+    const completedItems = queue.filter(item => item.status === "concluido" && item.convertedBlobUrl);
+    if (completedItems.length === 0) return;
+
+    const totalConvertedSize = completedItems.reduce((sum, item) => sum + (item.convertedSize || 0), 0);
+    const limit50MB = 50 * 1024 * 1024;
+    const limit100MB = 100 * 1024 * 1024;
+
+    if (!force) {
+      if (totalConvertedSize > limit100MB) {
+        setZipWarningType("warning-100");
+        return;
+      } else if (totalConvertedSize > limit50MB) {
+        setZipWarningType("warning-50");
+        return;
+      }
+    }
+
+    setZipWarningType("none");
+    setIsGeneratingZip(true);
+
+    try {
+      // 1. Generate unique file names inside the zip container
+      const usedNames = new Set<string>();
+      const uniqueEntries = completedItems.map(item => {
+        const originalName = item.file.name;
+        const lastDotIndex = originalName.lastIndexOf(".");
+        const baseName = lastDotIndex !== -1 ? originalName.substring(0, lastDotIndex) : originalName;
+        
+        let fileName = `${baseName}-96kbps.mp3`;
+        let counter = 2;
+        
+        while (usedNames.has(fileName.toLowerCase())) {
+          fileName = `${baseName}-96kbps-${counter}.mp3`;
+          counter++;
+        }
+        
+        usedNames.add(fileName.toLowerCase());
+        return {
+          item,
+          fileName
+        };
+      });
+
+      // 2. Fetch the local Blob data into Uint8Arrays
+      const filesToZip: Record<string, [Uint8Array, { level: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 }]> = {};
+      for (const entry of uniqueEntries) {
+        const response = await fetch(entry.item.convertedBlobUrl!);
+        const arrayBuffer = await response.arrayBuffer();
+        const uint8Array = new Uint8Array(arrayBuffer);
+        // Level 0 means simple uncompressed store - extremely fast & low CPU/RAM overhead
+        filesToZip[entry.fileName] = [uint8Array, { level: 0 }];
+      }
+
+      // 3. Generate ZIP with fflate
+      const zippedData = zipSync(filesToZip);
+      const zipBlob = new Blob([zippedData], { type: "application/zip" });
+      const zipUrl = URL.createObjectURL(zipBlob);
+
+      // 4. Trigger auto-download
+      const link = document.createElement("a");
+      link.href = zipUrl;
+      link.download = "somleve-arquivos-convertidos.zip";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      // 5. Release memory
+      setTimeout(() => {
+        URL.revokeObjectURL(zipUrl);
+      }, 5000);
+
+    } catch (err: any) {
+      console.error("Erro ao gerar arquivo ZIP: ", err);
+      setGlobalError("Não foi possível gerar o arquivo ZIP localmente. Tente baixar os arquivos individualmente.");
+    } finally {
+      setIsGeneratingZip(false);
+    }
+  };
+
   // Cleanup Object URLs on unmount
   useEffect(() => {
     return () => {
@@ -844,8 +928,51 @@ export default function App() {
               )}
             </div>
 
+            {/* Download All ZIP Actions */}
+            {completedCount >= 2 && !isProcessing ? (
+              <div className="mt-6 pt-5 border-t border-slate-900/60 flex flex-col sm:flex-row gap-3" id="zip-action-container">
+                <button
+                  onClick={() => handleDownloadAllZip()}
+                  disabled={isGeneratingZip}
+                  className="flex-1 px-6 py-3.5 text-sm font-bold rounded-xl text-white bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 active:scale-[0.99] transition-all duration-150 flex items-center justify-center space-x-2 h-13 shadow-lg shadow-emerald-950/20 disabled:opacity-50 disabled:cursor-not-allowed disabled:scale-100 cursor-pointer"
+                  id="btn-download-all-zip"
+                >
+                  {isGeneratingZip ? (
+                    <>
+                      <RefreshCw className="h-4 w-4 animate-spin text-white" />
+                      <span>Preparando download de {completedCount} arquivos...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Download className="h-4 w-4" />
+                      <span>Baixar todos os {completedCount} arquivos</span>
+                    </>
+                  )}
+                </button>
+                <button
+                  onClick={clearQueue}
+                  className="px-6 py-3.5 text-sm font-bold rounded-xl bg-slate-950 text-slate-400 border border-slate-900 hover:border-slate-800 hover:text-slate-300 transition-all duration-150 h-13 flex items-center justify-center space-x-2 cursor-pointer"
+                  id="btn-convert-new-batch"
+                >
+                  <RefreshCw className="h-4 w-4" />
+                  <span>Converter novos arquivos</span>
+                </button>
+              </div>
+            ) : completedCount === 1 && queueLength === 1 && !isProcessing ? (
+              <div className="mt-6 pt-5 border-t border-slate-900/60 flex flex-col sm:flex-row gap-3" id="zip-action-container">
+                <button
+                  onClick={clearQueue}
+                  className="w-full px-6 py-3.5 text-sm font-bold rounded-xl bg-slate-950 text-slate-400 border border-slate-900 hover:border-slate-800 hover:text-slate-300 transition-all duration-150 h-13 flex items-center justify-center space-x-2 cursor-pointer"
+                  id="btn-convert-new-batch"
+                >
+                  <RefreshCw className="h-4 w-4" />
+                  <span>Converter novos arquivos</span>
+                </button>
+              </div>
+            ) : null}
+
             {/* Queue Control Buttons */}
-            {queueLength > 0 && (
+            {queueLength > 0 && (isProcessing || queue.some(item => item.status === "aguardando" || item.status === "cancelado" || item.status === "erro")) && (
               <div className="mt-6 pt-5 border-t border-slate-900 space-y-4" id="action-buttons-box">
                 
                 {/* Global conversion progress text */}
@@ -988,6 +1115,49 @@ export default function App() {
           </div>
         </div>
       </footer>
+
+      {/* Safety Size Warning Modal */}
+      {zipWarningType !== "none" && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm" id="zip-warning-modal">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 shadow-2xl relative space-y-4" id="zip-warning-content">
+            <div className="flex items-center space-x-3 text-amber-400">
+              <AlertCircle className="h-6 w-6" />
+              <h3 className="font-display font-bold text-base text-slate-100">
+                {zipWarningType === "warning-100" ? "Aviso de Alto Consumo" : "Aviso de Tamanho"}
+              </h3>
+            </div>
+            
+            <p className="text-xs text-slate-300 leading-relaxed">
+              {zipWarningType === "warning-100" ? (
+                <>
+                  O tamanho total dos arquivos convertidos é muito alto (<strong>{formatBytes(queue.filter(item => item.status === "concluido").reduce((sum, item) => sum + (item.convertedSize || 0), 0))}</strong>). Para melhor desempenho, recomendamos baixar os arquivos individualmente na lista acima. Se preferir, você ainda pode tentar gerar o arquivo ZIP localmente.
+                </>
+              ) : (
+                <>
+                  O tamanho total dos arquivos convertidos é grande (<strong>{formatBytes(queue.filter(item => item.status === "concluido").reduce((sum, item) => sum + (item.convertedSize || 0), 0))}</strong>). A geração do arquivo ZIP pode demorar em celulares ou dispositivos com menos memória. Deseja continuar?
+                </>
+              )}
+            </p>
+
+            <div className="flex flex-col gap-2.5 pt-2">
+              <button
+                onClick={() => handleDownloadAllZip(true)}
+                className="w-full px-4 py-2.5 text-xs font-bold bg-emerald-500 hover:bg-emerald-400 text-white rounded-xl transition-colors cursor-pointer"
+                id="btn-confirm-zip"
+              >
+                {zipWarningType === "warning-100" ? "Tentar gerar ZIP mesmo assim" : "Sim, gerar ZIP"}
+              </button>
+              <button
+                onClick={() => setZipWarningType("none")}
+                className="w-full px-4 py-2.5 text-xs font-bold bg-slate-950 border border-slate-800 text-slate-400 hover:text-slate-300 rounded-xl transition-colors cursor-pointer"
+                id="btn-cancel-zip"
+              >
+                {zipWarningType === "warning-100" ? "Baixar arquivos individualmente / Cancelar" : "Cancelar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );
