@@ -245,7 +245,10 @@ export default function App() {
   const isCancelledRef = useRef<boolean>(false);
 
   // Supported extensions
-  const allowedExtensions = ["wav", "mp3", "mp4", "mpeg", "mpg", "m4a", "aac", "flac", "ogg", "webm"];
+  const allowedExtensions = [
+    "mp3", "wav", "m4a", "aac", "flac", "ogg", "opus", "wma", "amr", "aiff", "aif", "caf", "ac3", "mp2", "mp1", "pcm", "au", "snd",
+    "mp4", "mpeg", "mpg", "mov", "avi", "mkv", "webm", "3gp", "3g2", "mts", "m2ts", "ts", "flv", "wmv", "vob"
+  ];
 
   // Provisional Limits
   const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
@@ -346,9 +349,12 @@ export default function App() {
     for (const file of filesArray) {
       const ext = file.name.split(".").pop()?.toLowerCase() || "";
       
-      // Validation: Extension
-      if (!allowedExtensions.includes(ext)) {
-        setGlobalError(`Formato inválido rejeitado: .${ext.toUpperCase()}. Use apenas formatos de áudio suportados.`);
+      // Validation: Permissive check on extension or media MIME type or empty type/ext (for mobile/unknown files)
+      const isAllowedExt = allowedExtensions.includes(ext);
+      const isMediaMime = file.type.startsWith("audio/") || file.type.startsWith("video/") || file.type === "";
+      
+      if (!isAllowedExt && !isMediaMime) {
+        setGlobalError(`O arquivo "${file.name}" não pôde ser adicionado por não parecer um formato de mídia compatível.`);
         continue;
       }
 
@@ -529,39 +535,44 @@ export default function App() {
       } catch (err: any) {
         console.error("Erro ao converter arquivo: ", currentItem.name, err);
         
-        let customMessage = err.message || "Falha na decodificação ou conversão de áudio.";
-        const isMp4 = currentItem.file.name.toLowerCase().endsWith(".mp4") || 
-                      currentItem.file.type.includes("mp4");
+        let customMessage = "Não foi possível interpretar o áudio deste arquivo. O formato, codec ou conteúdo pode não ser compatível com o seu navegador.";
+        
+        const nameLower = currentItem.file.name.toLowerCase();
+        const typeLower = currentItem.file.type.toLowerCase();
+        
+        const isMp4 = nameLower.endsWith(".mp4") || 
+                      nameLower.endsWith(".m4a") || 
+                      nameLower.endsWith(".mov") || 
+                      nameLower.endsWith(".3gp") || 
+                      nameLower.endsWith(".3g2") || 
+                      typeLower.includes("mp4") || 
+                      typeLower.includes("quicktime") || 
+                      typeLower.includes("3gpp") ||
+                      typeLower.includes("3g2");
+        
+        const isMpeg = nameLower.endsWith(".mpeg") || 
+                       nameLower.endsWith(".mpg") || 
+                       typeLower.includes("mpeg");
         
         if (isMp4) {
           try {
             const arrayBuffer = await currentItem.file.arrayBuffer();
             const mp4Info = checkMp4Audio(arrayBuffer);
             if (!mp4Info.hasAudio) {
-              customMessage = "Este arquivo MP4 não possui uma faixa de áudio válida.";
-            } else {
-              customMessage = "Este arquivo MP4 contém um formato de áudio que o navegador não conseguiu interpretar.";
+              customMessage = "Este arquivo não possui uma faixa de áudio válida.";
             }
           } catch (e) {
-            customMessage = "Este arquivo MP4 contém um formato de áudio que o navegador não conseguiu interpretar.";
+            // Quiet fail, defaults to generic codec error
           }
-        }
-
-        const isMpeg = currentItem.file.name.toLowerCase().endsWith(".mpeg") || 
-                       currentItem.file.name.toLowerCase().endsWith(".mpg") || 
-                       currentItem.file.type.includes("mpeg");
-        
-        if (isMpeg) {
+        } else if (isMpeg) {
           try {
             const arrayBuffer = await currentItem.file.arrayBuffer();
             const mpegInfo = checkMpegAudio(arrayBuffer);
             if (!mpegInfo.hasAudio) {
-              customMessage = "Este arquivo MPEG não possui uma faixa de áudio válida.";
-            } else {
-              customMessage = "Este arquivo MPEG contém um formato de áudio que o navegador não conseguiu interpretar.";
+              customMessage = "Este arquivo não possui uma faixa de áudio válida.";
             }
           } catch (e) {
-            customMessage = "Este arquivo MPEG contém um formato de áudio que o navegador não conseguiu interpretar.";
+            // Quiet fail, defaults to generic codec error
           }
         }
 
@@ -810,7 +821,7 @@ export default function App() {
                 type="file" 
                 multiple
                 className="hidden" 
-                accept=".wav,.mp3,.mp4,.mpeg,.mpg,.m4a,.aac,.flac,.ogg,.webm,audio/*,video/mp4,application/mp4,video/mpeg,audio/mpeg,application/mpeg"
+                accept=".mp3,.wav,.m4a,.aac,.flac,.ogg,.opus,.wma,.amr,.aiff,.aif,.caf,.ac3,.mp2,.mp1,.pcm,.au,.snd,.mp4,.mpeg,.mpg,.mov,.avi,.mkv,.webm,.3gp,.3g2,.mts,.m2ts,.ts,.flv,.wmv,.vob,audio/*,video/*"
                 onChange={handleChange}
               />
               
@@ -820,10 +831,13 @@ export default function App() {
 
               <div className="space-y-1">
                 <p className="text-sm font-semibold text-slate-200" id="upload-text-main">
-                  Clique ou arraste de 1 até 15 arquivos de áudio
+                  Clique ou arraste de 1 até 15 arquivos para converter
                 </p>
-                <p className="text-xs text-slate-500" id="upload-text-sub">
-                  Suporta WAV, MP3, MP4, MPEG, MPG, M4A, AAC, FLAC, OGG e WEBM de até 50 MB cada.
+                <p className="text-xs text-slate-400 font-medium" id="upload-text-sub-main">
+                  Compatível com os principais formatos de áudio e arquivos de vídeo que contenham som.
+                </p>
+                <p className="text-[11px] text-slate-500" id="upload-text-sub">
+                  O suporte pode variar conforme o codec e o navegador utilizado. Limite de 50 MB por arquivo.
                 </p>
               </div>
             </form>
