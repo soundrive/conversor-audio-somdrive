@@ -1,6 +1,6 @@
 {
   "name": "Som Leve",
-  "description": "Converta seus arquivos de áudio para MP3 96 kbps de forma rápida, leve e segura, diretamente no seu dispositivo.",
+  "description": "Conversor SomDrive: Ferramenta profissional de conversão de áudio e extração local otimizada para computadores. Processamento rápido, seguro e privado 100% no navegador.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
