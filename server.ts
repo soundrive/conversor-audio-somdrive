@@ -283,8 +283,9 @@ function getR2Client() {
   return { s3, bucketName, publicBaseUrl };
 }
 
+const app = express();
+
 async function startServer() {
-  const app = express();
   const PORT = 3000;
 
   // Body parser
@@ -772,18 +773,26 @@ async function startServer() {
       appType: "spa"
     });
     app.use(vite.middlewares);
+
+    app.listen(PORT, "0.0.0.0", () => {
+      console.log(`[SERVER] Express server running on http://localhost:${PORT}`);
+    });
   } else {
     console.log("[SERVER] Starting in production mode...");
-    const distPath = path.join(process.cwd(), "dist");
-    app.use(express.static(distPath));
-    app.get("*", (req, res) => {
-      res.sendFile(path.join(distPath, "index.html"));
-    });
-  }
+    if (!process.env.VERCEL) {
+      const distPath = path.join(process.cwd(), "dist");
+      app.use(express.static(distPath));
+      app.get("*", (req, res) => {
+        res.sendFile(path.join(distPath, "index.html"));
+      });
 
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`[SERVER] Express server running on http://localhost:${PORT}`);
-  });
+      app.listen(PORT, "0.0.0.0", () => {
+        console.log(`[SERVER] Express server running on port ${PORT}`);
+      });
+    }
+  }
 }
 
 startServer();
+
+export default app;
