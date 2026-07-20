@@ -1,0 +1,13 @@
+{
+  "$schema": "../node_modules/@tauri-apps/cli/schema-capability.json",
+  "identifier": "default",
+  "description": "Permissões padrão para o Conversor SomDrive Desktop",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "dialog:default",
+    "shell:default",
+    "core:path:default",
+    "core:event:default"
+  ]
+}

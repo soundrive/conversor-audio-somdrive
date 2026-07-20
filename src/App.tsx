@@ -5,1237 +5,1006 @@
 
 import React, { useState, useRef, useEffect } from "react";
 import { 
-  Upload, 
-  Download, 
-  CheckCircle2, 
-  AlertCircle, 
-  RefreshCw, 
-  FileAudio, 
-  Clock, 
-  ShieldCheck, 
   Volume2, 
-  Layers, 
-  Settings,
-  Info,
-  Trash2,
-  X,
-  Play,
-  ArrowRight
+  ShieldCheck, 
+  Music, 
+  FileText, 
+  Info, 
+  Lock, 
+  Zap, 
+  Award,
+  ArrowRight,
+  Layers,
+  Scissors,
+  Sparkles,
+  Image,
+  Smartphone,
+  AlertTriangle,
+  ExternalLink,
+  HelpCircle,
+  Settings as SettingsIcon,
+  Sun
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
-import { zipSync } from "fflate";
+import AudioConverter from "./pages/AudioConverter";
+import PdfTools from "./pages/PdfTools";
+import AdminPanel from "./pages/AdminPanel";
+import AdminLogin from "./pages/AdminLogin";
+import { Ad, SeoConfig } from "./types";
+import { collection, getDocs, query, where, doc, getDoc, onSnapshot } from "firebase/firestore";
+import { db, handleFirestoreError, OperationType } from "./firebase";
+import { initGA, trackPageView, trackEvent, updateGAConsent } from "./lib/gtag";
+import PublicAdCard from "./components/PublicAdCard";
 
-// Web Worker code as a string to run the LameJS encoder in a background thread
-const workerCode = `
-  self.importScripts('https://cdnjs.cloudflare.com/ajax/libs/lamejs/1.2.1/lame.all.min.js');
 
-  self.onmessage = function(e) {
-    const { left, right, channels, sampleRate, kbps } = e.data;
-    
-    // Check if lamejs loaded successfully from CDN
-    var lameInstance = typeof lamejs !== 'undefined' ? lamejs : (typeof lame !== 'undefined' ? lame : null);
-    if (!lameInstance) {
-      self.postMessage({ type: 'error', error: 'Não foi possível carregar a biblioteca de codificação MP3 (LameJS).' });
-      return;
-    }
-    
-    // Helper function to convert Float32Array to Int16Array (16-bit signed PCM)
-    function floatTo16BitPCM(float32Array) {
-      var len = float32Array.length;
-      var buffer = new Int16Array(len);
-      for (var i = 0; i < len; i++) {
-        var s = Math.max(-1, Math.min(1, float32Array[i]));
-        buffer[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
-      }
-      return buffer;
-    }
-    
-    self.postMessage({ type: 'status', message: 'Processando canais...' });
-    
-    var leftPCM = floatTo16BitPCM(left);
-    var rightPCM = (channels === 2 && right) ? floatTo16BitPCM(right) : null;
-    
-    self.postMessage({ type: 'status', message: 'Codificando em MP3 @ 96kbps...' });
-    
-    var mp3encoder = new lameInstance.Mp3Encoder(channels, sampleRate, kbps);
-    var mp3Data = [];
-    
-    var sampleBlockSize = 1152; // LAME standard block size
-    var totalSamples = leftPCM.length;
-    
-    for (var i = 0; i < totalSamples; i += sampleBlockSize) {
-      var leftChunk = leftPCM.subarray(i, i + sampleBlockSize);
-      var mp3buf;
-      
-      if (channels === 2 && rightPCM) {
-        var rightChunk = rightPCM.subarray(i, i + sampleBlockSize);
-        mp3buf = mp3encoder.encodeBuffer(leftChunk, rightChunk);
-      } else {
-        mp3buf = mp3encoder.encodeBuffer(leftChunk);
-      }
-      
-      if (mp3buf.length > 0) {
-        mp3Data.push(new Uint8Array(mp3buf));
-      }
-      
-      // Periodically report progress to the main thread
-      if (i % (sampleBlockSize * 25) === 0 || i + sampleBlockSize >= totalSamples) {
-        var progress = Math.min(100, Math.round((i / totalSamples) * 100));
-        self.postMessage({ type: 'progress', progress: progress });
-      }
-    }
-    
-    var mp3bufFlush = mp3encoder.flush();
-    if (mp3bufFlush.length > 0) {
-      mp3Data.push(new Uint8Array(mp3bufFlush));
-    }
-    
-    // Combine all MP3 chunks into a single ArrayBuffer to transfer back
-    var totalLength = 0;
-    for (var j = 0; j < mp3Data.length; j++) {
-      totalLength += mp3Data[j].length;
-    }
-    var result = new Uint8Array(totalLength);
-    var offset = 0;
-    for (var j = 0; j < mp3Data.length; j++) {
-      result.set(mp3Data[j], offset);
-      offset += mp3Data[j].length;
-    }
-    
-    self.postMessage({ type: 'complete', data: result.buffer }, [result.buffer]);
-  };
-`;
-
-// Helper function to check if an MP4/M4A file contains an audio track ('soun')
-function checkMp4Audio(arrayBuffer: ArrayBuffer): { hasAudio: boolean; hasVideo: boolean } {
-  const view = new DataView(arrayBuffer);
-  let hasAudio = false;
-  let hasVideo = false;
-  const len = arrayBuffer.byteLength;
-  
-  function parseBoxes(start: number, end: number) {
-    let pos = start;
-    while (pos + 8 <= end) {
-      let boxSize = view.getUint32(pos);
-      let headerSize = 8;
-      
-      if (boxSize === 1) {
-        if (pos + 16 > end) break;
-        // 64-bit box size - read the lower 32-bits (within range for standard browser files)
-        boxSize = view.getUint32(pos + 12);
-        headerSize = 16;
-      } else if (boxSize === 0) {
-        boxSize = end - pos;
-      }
-      
-      if (boxSize < headerSize) break; // prevent infinite loops
-      
-      const typeBytes = [
-        view.getUint8(pos + 4),
-        view.getUint8(pos + 5),
-        view.getUint8(pos + 6),
-        view.getUint8(pos + 7)
-      ];
-      const boxType = String.fromCharCode(...typeBytes);
-      
-      if (boxType === "moov" || boxType === "trak" || boxType === "mdia") {
-        parseBoxes(pos + headerSize, Math.min(pos + boxSize, end));
-      } else if (boxType === "hdlr") {
-        if (pos + headerSize + 12 <= end) {
-          const handlerBytes = [
-            view.getUint8(pos + headerSize + 8),
-            view.getUint8(pos + headerSize + 9),
-            view.getUint8(pos + headerSize + 10),
-            view.getUint8(pos + headerSize + 11)
-          ];
-          const handlerType = String.fromCharCode(...handlerBytes);
-          if (handlerType === "soun") {
-            hasAudio = true;
-          } else if (handlerType === "vide") {
-            hasVideo = true;
-          }
-        }
-      }
-      
-      pos += boxSize;
-    }
-  }
-  
-  try {
-    parseBoxes(0, len);
-  } catch (e) {
-    console.error("Erro ao analisar MP4: ", e);
-  }
-  
-  return { hasAudio, hasVideo };
-}
-
-// Helper function to check if an MPEG/MPG file contains an audio stream
-function checkMpegAudio(arrayBuffer: ArrayBuffer): { hasAudio: boolean; hasVideo: boolean } {
-  const view = new DataView(arrayBuffer);
-  const len = arrayBuffer.byteLength;
-  let hasAudio = false;
-  let hasVideo = false;
-
-  // Scan the file for pack headers or stream IDs to find audio streams
-  // Scan up to 10MB to keep search extremely fast and lightweight
-  const scanLimit = Math.min(len, 10 * 1024 * 1024);
-
-  for (let i = 0; i < scanLimit - 4; i++) {
-    // Look for MPEG start code prefix 0x000001
-    if (view.getUint8(i) === 0x00 && view.getUint8(i + 1) === 0x00 && view.getUint8(i + 2) === 0x01) {
-      const streamId = view.getUint8(i + 3);
-      // Stream IDs 0xC0 to 0xDF are MPEG Audio Streams
-      if (streamId >= 0xC0 && streamId <= 0xDF) {
-        hasAudio = true;
-      }
-      // Stream IDs 0xE0 to 0xEF are MPEG Video Streams
-      else if (streamId >= 0xE0 && streamId <= 0xEF) {
-        hasVideo = true;
-      }
-
-      if (hasAudio && hasVideo) {
-        break;
-      }
-    }
-  }
-
-  // Fallback: If no PS audio stream found, scan for MPEG Audio Frame Syncwords (e.g., MP3 or MP2 frame headers 0xFFE / 0xFFF)
-  if (!hasAudio) {
-    for (let i = 0; i < scanLimit - 2; i++) {
-      const byte1 = view.getUint8(i);
-      const byte2 = view.getUint8(i + 1);
-      if (byte1 === 0xFF && (byte2 & 0xE0) === 0xE0) {
-        hasAudio = true;
-        break;
-      }
-    }
-  }
-
-  return { hasAudio, hasVideo };
-}
-
-interface QueueItem {
-  id: string;
-  file: File;
-  name: string;
-  originalSize: number;
-  format: string;
-  duration: number | null;
-  channels: number | null;
-  status: "aguardando" | "preparando" | "convertendo" | "concluido" | "erro" | "cancelado";
-  progress: number;
-  convertedSize: number | null;
-  convertedBlobUrl: string | null;
-  convertedFileName: string | null;
-  errorMessage: string | null;
-}
+type TabType = "inicio" | "audio" | "pdf";
 
 export default function App() {
-  const [queue, setQueue] = useState<QueueItem[]>([]);
-  const [isProcessing, setIsProcessing] = useState<boolean>(false);
-  const [currentProcessingIndex, setCurrentProcessingIndex] = useState<number>(-1);
-  const [globalError, setGlobalError] = useState<string | null>(null);
-  const [dragActive, setDragActive] = useState<boolean>(false);
-  const [isGeneratingZip, setIsGeneratingZip] = useState<boolean>(false);
-  const [zipWarningType, setZipWarningType] = useState<"none" | "warning-50" | "warning-100">("none");
+  const [activeTab, setActiveTab] = useState<TabType>("inicio");
+  const [activePdfTool, setActivePdfTool] = useState<string>("none");
+  const [isMobile, setIsMobile] = useState<boolean>(false);
+  const [dismissedMobileWarning, setDismissedMobileWarning] = useState<boolean>(false);
+  const [currentPath, setCurrentPath] = useState<string>(window.location.pathname);
+  const mainContentRef = useRef<HTMLDivElement>(null);
 
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const activeWorkerRef = useRef<Worker | null>(null);
-  const isCancelledRef = useRef<boolean>(false);
-
-  // Supported extensions
-  const allowedExtensions = [
-    "mp3", "wav", "m4a", "aac", "flac", "ogg", "opus", "wma", "amr", "aiff", "aif", "caf", "ac3", "mp2", "mp1", "pcm", "au", "snd",
-    "mp4", "mpeg", "mpg", "mov", "avi", "mkv", "webm", "3gp", "3g2", "mts", "m2ts", "ts", "flv", "wmv", "vob"
-  ];
-
-  // Provisional Limits
-  const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
-  const MAX_BATCH_SIZE = 150 * 1024 * 1024; // 150MB
-  const MAX_FILES_COUNT = 15;
-
-  // Format bytes nicely
-  const formatBytes = (bytes: number, decimals = 2) => {
-    if (bytes === 0) return "0 Bytes";
-    const k = 1024;
-    const dm = decimals < 0 ? 0 : decimals;
-    const sizes = ["Bytes", "KB", "MB", "GB"];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + " " + sizes[i];
-  };
-
-  // Format duration nicely (mm:ss)
-  const formatDuration = (seconds: number | null) => {
-    if (seconds === null) return "--:--";
-    const mins = Math.floor(seconds / 60);
-    const secs = Math.floor(seconds % 60);
-    return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
-  };
-
-  // Clear single item from queue
-  const removeItem = (id: string) => {
-    setQueue((prev) => {
-      const target = prev.find(item => item.id === id);
-      if (target && target.convertedBlobUrl) {
-        URL.revokeObjectURL(target.convertedBlobUrl);
-      }
-      return prev.filter(item => item.id !== id);
-    });
-  };
-
-  // Clear all list and stop any active worker
-  const clearQueue = () => {
-    cancelQueue();
-    queue.forEach(item => {
-      if (item.convertedBlobUrl) {
-        URL.revokeObjectURL(item.convertedBlobUrl);
-      }
-    });
-    setQueue([]);
-    setGlobalError(null);
-  };
-
-  // Cancel overall active conversion process
-  const cancelQueue = () => {
-    isCancelledRef.current = true;
-    if (activeWorkerRef.current) {
-      activeWorkerRef.current.terminate();
-      activeWorkerRef.current = null;
+  // SEO Config state
+  const [seoConfig, setSeoConfig] = useState<SeoConfig>({
+    siteName: "Conversor SunDrive",
+    title: "Conversor de Áudio e Ferramentas PDF Grátis | Conversor SunDrive",
+    description: "Converta arquivos de áudio para MP3, WAV e outros formatos e utilize ferramentas para comprimir, juntar e organizar PDFs. Sem login e sem salvar seus arquivos.",
+    canonical: "https://somdrive.com",
+    robots: "index, follow",
+    ogTitle: "Conversor de Áudio e Ferramentas PDF Grátis | Conversor SunDrive",
+    ogDescription: "Converta arquivos de áudio para MP3, WAV e outros formatos e utilize ferramentas para comprimir, juntar e organizar PDFs. Sem login e sem salvar seus arquivos.",
+    ogImage: "https://somdrive.com/og-image.jpg",
+    twitterCard: "summary_large_image",
+    siteLogoUrl: "",
+    siteTitle: "Conversor SunDrive",
+    siteSubtitle: "Ferramentas para áudio e PDF.",
+    pages: {
+      home: { title: "Conversor de Áudio e Ferramentas PDF Grátis | Conversor SunDrive", description: "Converta arquivos de áudio para MP3, WAV e outros formatos e utilize ferramentas para comprimir, juntar e organizar PDFs. Sem login e sem salvar seus arquivos." },
+      audio: { title: "Conversor de Áudio Grátis para MP3, WAV e Mais | SunDrive", description: "Converta seus arquivos de áudio online 100% no seu navegador de forma gratuita e segura. Suporta MP3, WAV, AAC, FLAC e OGG." },
+      pdf: { title: "Comprimir, Juntar e Organizar PDF Grátis | SunDrive", description: "Ferramentas PDF grátis e seguras de nível profissional. Junte, comprima, reordene e exclua páginas de arquivos PDF 100% no seu navegador." },
+      merge: { title: "Juntar PDF Grátis Online | SunDrive", description: "Combine múltiplos arquivos PDF em uma única sequência organizada sem perda de qualidade e com segurança total." },
+      compress: { title: "Comprimir PDF Grátis sem Perda de Qualidade | SunDrive", description: "Reduza o tamanho do seu PDF online de forma rápida e segura sem comprometer a leitura dos textos." },
+      imgToPdf: { title: "Converter Imagens JPG, PNG para PDF Grátis | SunDrive", description: "Transforme fotos e imagens em documentos PDF profissionais com formatação A4 e margens ajustáveis." },
+      organize: { title: "Organizar e Reordenar Páginas PDF Grátis | SunDrive", description: "Mude a ordem das páginas do seu PDF de forma visual e simples através de arrastar e soltar." }
     }
-    
-    setQueue((prev) => prev.map((item, index) => {
-      if (item.status === "convertendo" || item.status === "preparando" || item.status === "aguardando") {
-        return { ...item, status: "cancelado", progress: 0 };
-      }
-      return item;
-    }));
+  });
 
-    setIsProcessing(false);
-    setCurrentProcessingIndex(-1);
+  // Ads state
+  const [ads, setAds] = useState<Ad[]>([]);
+  const [failedAdIds, setFailedAdIds] = useState<string[]>([]);
+
+  // Navigate function for pathname routing
+  const navigateTo = (path: string) => {
+    window.history.pushState(null, "", path);
+    setCurrentPath(path);
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  // Pre-decode audio metadata for displaying details in the queue
-  const readAudioMetadata = async (file: File): Promise<{ duration: number; channels: number }> => {
-    const arrayBuffer = await file.arrayBuffer();
-    const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-    if (!AudioContextClass) {
-      throw new Error("Web Audio API não suportada.");
-    }
-    const audioCtx = new AudioContextClass();
-    const buffer = await audioCtx.decodeAudioData(arrayBuffer);
-    const metadata = {
-      duration: buffer.duration,
-      channels: buffer.numberOfChannels
-    };
-    audioCtx.close();
-    return metadata;
-  };
-
-  // Add files to the queue with safety validation
-  const handleSelectedFiles = async (selectedFiles: FileList) => {
-    setGlobalError(null);
-    const filesArray = Array.from(selectedFiles);
-
-    // 1. Limit total files count
-    if (queue.length + filesArray.length > MAX_FILES_COUNT) {
-      setGlobalError(`Você pode converter no máximo 15 arquivos de uma vez. Fila atual: ${queue.length} arquivos.`);
-      return;
-    }
-
-    const newItems: QueueItem[] = [];
-    let currentBatchSize = queue.reduce((sum, item) => sum + item.originalSize, 0);
-
-    for (const file of filesArray) {
-      const ext = file.name.split(".").pop()?.toLowerCase() || "";
-      
-      // Validation: Permissive check on extension or media MIME type or empty type/ext (for mobile/unknown files)
-      const isAllowedExt = allowedExtensions.includes(ext);
-      const isMediaMime = file.type.startsWith("audio/") || file.type.startsWith("video/") || file.type === "";
-      
-      if (!isAllowedExt && !isMediaMime) {
-        setGlobalError(`O arquivo "${file.name}" não pôde ser adicionado por não parecer um formato de mídia compatível.`);
-        continue;
-      }
-
-      // Validation: Individual file size
-      if (file.size > MAX_FILE_SIZE) {
-        setGlobalError(`Arquivo rejeitado por exceder 50MB: "${file.name}" (${formatBytes(file.size)})`);
-        continue;
-      }
-
-      // Validation: Total batch size
-      if (currentBatchSize + file.size > MAX_BATCH_SIZE) {
-        setGlobalError(`Limite total do lote de 150MB seria excedido. Alguns arquivos foram ignorados.`);
-        break;
-      }
-
-      currentBatchSize += file.size;
-
-      const id = Math.random().toString(36).substring(2, 9);
-      newItems.push({
-        id,
-        file,
-        name: file.name,
-        originalSize: file.size,
-        format: ext.toUpperCase(),
-        duration: null,
-        channels: null,
-        status: "aguardando",
-        progress: 0,
-        convertedSize: null,
-        convertedBlobUrl: null,
-        convertedFileName: null,
-        errorMessage: null,
-      });
-    }
-
-    if (newItems.length > 0) {
-      setQueue((prev) => [...prev, ...newItems]);
-
-      // Lazy load metadata in the background to not block UI
-      newItems.forEach((item) => {
-        readAudioMetadata(item.file).then((meta) => {
-          setQueue((prev) => prev.map((q) => q.id === item.id ? { ...q, duration: meta.duration, channels: meta.channels } : q));
-        }).catch(() => {
-          // Quiet failure for background metadata retrieval
-        });
-      });
-    }
-  };
-
-  // Resample helper to target constant 44100 Hz rate
-  const resampleAudio = async (buffer: AudioBuffer): Promise<AudioBuffer> => {
-    const targetSampleRate = 44100;
-    const numberOfChannels = buffer.numberOfChannels;
-    const duration = buffer.duration;
-
-    const offlineCtx = new OfflineAudioContext(
-      numberOfChannels,
-      Math.round(targetSampleRate * duration),
-      targetSampleRate
-    );
-
-    const bufferSource = offlineCtx.createBufferSource();
-    bufferSource.buffer = buffer;
-    bufferSource.connect(offlineCtx.destination);
-    bufferSource.start();
-
-    return await offlineCtx.startRendering();
-  };
-
-  // Run the sequential queue process loop
-  const startBatchConversion = async () => {
-    if (isProcessing || queue.length === 0) return;
-
-    // Check if there are items left to convert
-    const itemsToConvert = queue.filter(item => item.status === "aguardando" || item.status === "cancelado" || item.status === "erro");
-    if (itemsToConvert.length === 0) {
-      setGlobalError("Todos os arquivos selecionados já foram convertidos com sucesso!");
-      return;
-    }
-
-    setIsProcessing(true);
-    isCancelledRef.current = false;
-    setGlobalError(null);
-
-    // Process one item at a time sequentially
-    for (let i = 0; i < queue.length; i++) {
-      if (isCancelledRef.current) break;
-
-      const currentItem = queue[i];
-      if (currentItem.status === "concluido") continue; // skip already converted
-
-      setCurrentProcessingIndex(i);
-      
-      // Update item status in the state
-      setQueue((prev) => prev.map((q, idx) => idx === i ? { ...q, status: "preparando", progress: 5 } : q));
-
+  // Synchronize dynamic SEO configs
+  const loadConfigAndAds = async () => {
+    const storedSeo = localStorage.getItem("somdrive_seo");
+    if (storedSeo) {
       try {
-        const arrayBuffer = await currentItem.file.arrayBuffer();
-        const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-        const audioCtx = new AudioContextClass();
-        
-        // Update item status
-        setQueue((prev) => prev.map((q, idx) => idx === i ? { ...q, status: "preparando", progress: 20 } : q));
-        
-        const decodedBuffer = await audioCtx.decodeAudioData(arrayBuffer);
-        audioCtx.close(); // Immediate cleanup of memory
-
-        // Resample to 44100 Hz
-        setQueue((prev) => prev.map((q, idx) => idx === i ? { ...q, status: "preparando", progress: 40 } : q));
-        const resampledBuffer = await resampleAudio(decodedBuffer);
-
-        // Update item status to converting
-        setQueue((prev) => prev.map((q, idx) => idx === i ? { ...q, status: "convertendo", progress: 0 } : q));
-
-        // Start Web Worker for MP3 conversion
-        await new Promise<void>((resolve, reject) => {
-          const workerBlob = new Blob([workerCode], { type: "application/javascript" });
-          const workerUrl = URL.createObjectURL(workerBlob);
-          const worker = new Worker(workerUrl);
-          activeWorkerRef.current = worker;
-
-          const cleanUpWorker = () => {
-            worker.terminate();
-            URL.revokeObjectURL(workerUrl);
-            activeWorkerRef.current = null;
-          };
-
-          worker.onmessage = (e) => {
-            const msg = e.data;
-            if (msg.type === "progress") {
-              setQueue((prev) => prev.map((q, idx) => idx === i ? { ...q, progress: msg.progress } : q));
-            } else if (msg.type === "error") {
-              cleanUpWorker();
-              reject(new Error(msg.error));
-            } else if (msg.type === "complete") {
-              const mp3Buffer = msg.data;
-              const mp3Blob = new Blob([mp3Buffer], { type: "audio/mp3" });
-              const mp3Url = URL.createObjectURL(mp3Blob);
-
-              const originalName = currentItem.file.name;
-              const lastDotIndex = originalName.lastIndexOf(".");
-              const baseName = lastDotIndex !== -1 ? originalName.substring(0, lastDotIndex) : originalName;
-
-              setQueue((prev) => prev.map((q, idx) => idx === i ? { 
-                ...q, 
-                status: "concluido", 
-                progress: 100,
-                convertedSize: mp3Blob.size,
-                convertedBlobUrl: mp3Url,
-                convertedFileName: `${baseName}.mp3`
-              } : q));
-
-              cleanUpWorker();
-              resolve();
-            }
-          };
-
-          const leftData = resampledBuffer.getChannelData(0);
-          const rightData = resampledBuffer.numberOfChannels > 1 ? resampledBuffer.getChannelData(1) : null;
-
-          const workerLeft = new Float32Array(leftData);
-          const workerRight = rightData ? new Float32Array(rightData) : null;
-
-          const transfers: Transferable[] = [workerLeft.buffer];
-          if (workerRight) {
-            transfers.push(workerRight.buffer);
-          }
-
-          worker.postMessage({
-            left: workerLeft,
-            right: workerRight,
-            channels: resampledBuffer.numberOfChannels,
-            sampleRate: 44100,
-            kbps: 96
-          }, transfers);
-        });
-
-      } catch (err: any) {
-        console.error("Erro ao converter arquivo: ", currentItem.name, err);
-        
-        let customMessage = "Não foi possível interpretar o áudio deste arquivo. O formato, codec ou conteúdo pode não ser compatível com o seu navegador.";
-        
-        const nameLower = currentItem.file.name.toLowerCase();
-        const typeLower = currentItem.file.type.toLowerCase();
-        
-        const isMp4 = nameLower.endsWith(".mp4") || 
-                      nameLower.endsWith(".m4a") || 
-                      nameLower.endsWith(".mov") || 
-                      nameLower.endsWith(".3gp") || 
-                      nameLower.endsWith(".3g2") || 
-                      typeLower.includes("mp4") || 
-                      typeLower.includes("quicktime") || 
-                      typeLower.includes("3gpp") ||
-                      typeLower.includes("3g2");
-        
-        const isMpeg = nameLower.endsWith(".mpeg") || 
-                       nameLower.endsWith(".mpg") || 
-                       typeLower.includes("mpeg");
-        
-        if (isMp4) {
-          try {
-            const arrayBuffer = await currentItem.file.arrayBuffer();
-            const mp4Info = checkMp4Audio(arrayBuffer);
-            if (!mp4Info.hasAudio) {
-              customMessage = "Este arquivo não possui uma faixa de áudio válida.";
-            }
-          } catch (e) {
-            // Quiet fail, defaults to generic codec error
-          }
-        } else if (isMpeg) {
-          try {
-            const arrayBuffer = await currentItem.file.arrayBuffer();
-            const mpegInfo = checkMpegAudio(arrayBuffer);
-            if (!mpegInfo.hasAudio) {
-              customMessage = "Este arquivo não possui uma faixa de áudio válida.";
-            }
-          } catch (e) {
-            // Quiet fail, defaults to generic codec error
-          }
-        }
-
-        setQueue((prev) => prev.map((q, idx) => idx === i ? { 
-          ...q, 
-          status: "erro", 
-          progress: 0,
-          errorMessage: customMessage
-        } : q));
-        // We continue to the next file regardless of error
+        setSeoConfig(JSON.parse(storedSeo));
+      } catch (e) {
+        console.error("Error loading SEO", e);
       }
     }
-
-    setIsProcessing(false);
-    setCurrentProcessingIndex(-1);
-  };
-
-  // Drag and drop event handlers
-  const handleDrag = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (e.type === "dragenter" || e.type === "dragover") {
-      setDragActive(true);
-    } else if (e.type === "dragleave") {
-      setDragActive(false);
-    }
-  };
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setDragActive(false);
-
-    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      handleSelectedFiles(e.dataTransfer.files);
-    }
-  };
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    e.preventDefault();
-    if (e.target.files && e.target.files.length > 0) {
-      handleSelectedFiles(e.target.files);
-    }
-  };
-
-  const triggerFileInput = () => {
-    fileInputRef.current?.click();
-  };
-
-  // Calculate statistics of the whole process
-  const completedCount = queue.filter(item => item.status === "concluido").length;
-  const queueLength = queue.length;
-  const totalOriginalBytes = queue.reduce((sum, item) => sum + item.originalSize, 0);
-  const totalConvertedBytes = queue.reduce((sum, item) => sum + (item.convertedSize || 0), 0);
-  const spaceSavings = totalOriginalBytes > 0 && totalConvertedBytes > 0 && totalOriginalBytes > totalConvertedBytes
-    ? Math.round(((totalOriginalBytes - totalConvertedBytes) / totalOriginalBytes) * 100)
-    : 0;
-
-  // Download all completed files in a single ZIP file (local-only, fflate level 0 store-only)
-  const handleDownloadAllZip = async (force = false) => {
-    const completedItems = queue.filter(item => item.status === "concluido" && item.convertedBlobUrl);
-    if (completedItems.length === 0) return;
-
-    const totalConvertedSize = completedItems.reduce((sum, item) => sum + (item.convertedSize || 0), 0);
-    const limit50MB = 50 * 1024 * 1024;
-    const limit100MB = 100 * 1024 * 1024;
-
-    if (!force) {
-      if (totalConvertedSize > limit100MB) {
-        setZipWarningType("warning-100");
-        return;
-      } else if (totalConvertedSize > limit50MB) {
-        setZipWarningType("warning-50");
-        return;
-      }
-    }
-
-    setZipWarningType("none");
-    setIsGeneratingZip(true);
 
     try {
-      // 1. Generate unique file names inside the zip container
-      const usedNames = new Set<string>();
-      const uniqueEntries = completedItems.map(item => {
-        const originalName = item.file.name;
-        const lastDotIndex = originalName.lastIndexOf(".");
-        const baseName = lastDotIndex !== -1 ? originalName.substring(0, lastDotIndex) : originalName;
-        
-        let fileName = `${baseName}-96kbps.mp3`;
-        let counter = 2;
-        
-        while (usedNames.has(fileName.toLowerCase())) {
-          fileName = `${baseName}-96kbps-${counter}.mp3`;
-          counter++;
-        }
-        
-        usedNames.add(fileName.toLowerCase());
-        return {
-          item,
-          fileName
-        };
-      });
-
-      // 2. Fetch the local Blob data into Uint8Arrays
-      const filesToZip: Record<string, [Uint8Array, { level: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 }]> = {};
-      for (const entry of uniqueEntries) {
-        const response = await fetch(entry.item.convertedBlobUrl!);
-        const arrayBuffer = await response.arrayBuffer();
-        const uint8Array = new Uint8Array(arrayBuffer);
-        // Level 0 means simple uncompressed store - extremely fast & low CPU/RAM overhead
-        filesToZip[entry.fileName] = [uint8Array, { level: 0 }];
+      const docRef = doc(db, "ads", "seo_config");
+      const docSnap = await getDoc(docRef);
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        setSeoConfig(prev => {
+          const merged = { ...prev, ...data } as SeoConfig;
+          localStorage.setItem("somdrive_seo", JSON.stringify(merged));
+          return merged;
+        });
       }
-
-      // 3. Generate ZIP with fflate
-      const zippedData = zipSync(filesToZip);
-      const zipBlob = new Blob([zippedData], { type: "application/zip" });
-      const zipUrl = URL.createObjectURL(zipBlob);
-
-      // 4. Trigger auto-download
-      const link = document.createElement("a");
-      link.href = zipUrl;
-      link.download = "somleve-arquivos-convertidos.zip";
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-
-      // 5. Release memory
-      setTimeout(() => {
-        URL.revokeObjectURL(zipUrl);
-      }, 5000);
-
-    } catch (err: any) {
-      console.error("Erro ao gerar arquivo ZIP: ", err);
-      setGlobalError("Não foi possível gerar o arquivo ZIP localmente. Tente baixar os arquivos individualmente.");
-    } finally {
-      setIsGeneratingZip(false);
+    } catch (err) {
+      console.warn("Could not load branding or SEO config from Firestore:", err);
     }
   };
 
-  // Cleanup Object URLs on unmount
+  // Load public active ads from Firestore (now handled in real-time by useEffect)
+  const loadPublicAds = async () => {
+    console.log("[PUBLIC ADS] real-time listener is active, manual loadPublicAds bypassed to avoid duplication.");
+  };
+
+  // Real-time listener for public active ads
   useEffect(() => {
+    console.log("[PUBLIC ADS] Setting up real-time listener for Ads...");
+    const q = collection(db, "ads");
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      try {
+        const now = new Date();
+        const list = snapshot.docs
+          .filter(docSnap => docSnap.id !== "seo_config")
+          .map(docSnap => {
+            const data = docSnap.data();
+            const isCurrentlyActive = data.active !== undefined 
+              ? data.active 
+              : (data.isActive !== undefined ? data.isActive : true);
+              
+            return {
+              id: docSnap.id,
+              title: data.internalTitle || data.title || "",
+              imageUrl: data.imageUrl || "",
+              storagePath: data.storagePath || "",
+              destinationUrl: data.destinationUrl || "",
+              altText: data.altText || "",
+              position: data.position || "sidebar_top",
+              active: isCurrentlyActive,
+              isActive: isCurrentlyActive, // backwards compatibility
+              startDate: data.startDate || null,
+              endDate: data.endDate || null,
+              internalTitle: data.internalTitle || data.title || "",
+              publicTitle: data.publicTitle || "",
+              description: data.description || "",
+              buttonText: data.buttonText || "Saiba mais",
+              format: data.format || "medium_rectangle",
+              order: data.order !== undefined ? Number(data.order) : 0,
+              customWidth: data.customWidth !== undefined ? Number(data.customWidth) : undefined,
+              customHeight: data.customHeight !== undefined ? Number(data.customHeight) : undefined,
+              createdAt: data.createdAt || "",
+              updatedAt: data.updatedAt || "",
+              createdBy: data.createdBy || ""
+            };
+          })
+          .filter(ad => {
+            // 1. Filter by active state
+            if (!ad.active) return false;
+
+            // 2. Filter by date ranges
+            const nowTime = now.getTime();
+            if (ad.startDate) {
+              let start: Date;
+              if (typeof ad.startDate === "object" && (ad.startDate as any).toDate) {
+                start = (ad.startDate as any).toDate();
+              } else {
+                start = new Date(ad.startDate);
+              }
+              if (!isNaN(start.getTime()) && nowTime < start.getTime()) {
+                return false;
+              }
+            }
+            if (ad.endDate) {
+              let end: Date;
+              if (typeof ad.endDate === "object" && (ad.endDate as any).toDate) {
+                end = (ad.endDate as any).toDate();
+              } else {
+                end = new Date(ad.endDate);
+              }
+              if (!isNaN(end.getTime()) && nowTime > end.getTime()) {
+                return false;
+              }
+            }
+            return true;
+          })
+          .sort((a, b) => a.order - b.order) as Ad[];
+          
+        setAds(list);
+      } catch (err) {
+        console.error("Error processing public ads snapshot:", err);
+      }
+    }, (err) => {
+      console.error("Error in public ads listener:", err);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  // GA4 states & refs
+  const [showConsentBanner, setShowConsentBanner] = useState<boolean>(false);
+  const lastTrackedRef = useRef<string>("");
+  const lastTrackedTopAdId = useRef<string>("");
+  const lastTrackedBottomAdId = useRef<string>("");
+
+  useEffect(() => {
+    // Initialize Google Analytics 4
+    initGA();
+
+    // Check if consent has already been given or if a banner is needed
+    if ((import.meta as any).env.VITE_GA_MEASUREMENT_ID) {
+      const savedDecision = localStorage.getItem("somdrive_ga_consent");
+      if (!savedDecision) {
+        setShowConsentBanner(true);
+      }
+    }
+
+    setIsMobile(/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent));
+    loadConfigAndAds();
+    loadPublicAds();
+
+    const handlePopState = () => {
+      setCurrentPath(window.location.pathname);
+    };
+    window.addEventListener("popstate", handlePopState);
+
+    const handleStorageChange = () => loadConfigAndAds();
+    window.addEventListener("storage", handleStorageChange);
+
     return () => {
-      queue.forEach(item => {
-        if (item.convertedBlobUrl) {
-          URL.revokeObjectURL(item.convertedBlobUrl);
-        }
-      });
+      window.removeEventListener("popstate", handlePopState);
+      window.removeEventListener("storage", handleStorageChange);
     };
   }, []);
 
+  // GA4 SPA Page View tracking hook
+  useEffect(() => {
+    let title = seoConfig.title;
+    let path = "/";
+
+    if (currentPath === "/admin-login") {
+      title = "Login Administrativo | SomDrive";
+      path = "/admin-login";
+    } else if (currentPath === "/admin") {
+      title = "Painel Administrativo | SomDrive";
+      path = "/admin";
+    } else {
+      if (activeTab === "inicio") {
+        title = seoConfig.pages.home.title;
+        path = "/";
+      } else if (activeTab === "audio") {
+        title = seoConfig.pages.audio.title;
+        path = "/audio";
+      } else if (activeTab === "pdf") {
+        if (activePdfTool === "none") {
+          title = seoConfig.pages.pdf.title;
+          path = "/pdf";
+        } else if (activePdfTool === "merge") {
+          title = seoConfig.pages.merge.title;
+          path = "/pdf/juntar";
+        } else if (activePdfTool === "compress") {
+          title = seoConfig.pages.compress.title;
+          path = "/pdf/comprimir";
+        } else if (activePdfTool === "imgToPdf") {
+          title = seoConfig.pages.imgToPdf.title;
+          path = "/pdf/imagens-para-pdf";
+        } else if (activePdfTool === "organize") {
+          title = seoConfig.pages.organize.title;
+          path = "/pdf/organizar";
+        } else if (activePdfTool === "deleteRotate") {
+          title = "Excluir e Girar Páginas de PDF | SomDrive";
+          path = "/pdf/excluir-girar";
+        }
+      }
+    }
+
+    // Deduplicate and track page view
+    const trackKey = `${path}:${title}`;
+    if (lastTrackedRef.current !== trackKey) {
+      lastTrackedRef.current = trackKey;
+      trackPageView(title, path);
+    }
+  }, [currentPath, activeTab, activePdfTool, seoConfig]);
+
+  // GA4 Ad Impression tracking hooks
+  useEffect(() => {
+    const topAd = getActiveAdByPosition("sidebar_top");
+    if (topAd && lastTrackedTopAdId.current !== topAd.id) {
+      lastTrackedTopAdId.current = topAd.id;
+      trackEvent("ad_view", { ad_id: topAd.id, ad_position: "sidebar_top" });
+    }
+  }, [ads, failedAdIds]);
+
+  useEffect(() => {
+    const bottomAd = getActiveAdByPosition("sidebar_bottom");
+    if (bottomAd && lastTrackedBottomAdId.current !== bottomAd.id) {
+      lastTrackedBottomAdId.current = bottomAd.id;
+      trackEvent("ad_view", { ad_id: bottomAd.id, ad_position: "sidebar_bottom" });
+    }
+  }, [ads, failedAdIds]);
+
+  const handleAcceptConsent = () => {
+    updateGAConsent("granted");
+    setShowConsentBanner(false);
+  };
+
+  const handleDeclineConsent = () => {
+    updateGAConsent("denied");
+    setShowConsentBanner(false);
+  };
+
+
+  // Update SEO Head tags dynamically based on active tab and tools
+  useEffect(() => {
+    let currentPageTitle = seoConfig.title;
+    let currentPageDesc = seoConfig.description;
+
+    if (activeTab === "inicio") {
+      currentPageTitle = seoConfig.pages.home.title;
+      currentPageDesc = seoConfig.pages.home.description;
+    } else if (activeTab === "audio") {
+      currentPageTitle = seoConfig.pages.audio.title;
+      currentPageDesc = seoConfig.pages.audio.description;
+    } else if (activeTab === "pdf") {
+      // Check which pdf tool is active
+      if (activePdfTool === "none") {
+        currentPageTitle = seoConfig.pages.pdf.title;
+        currentPageDesc = seoConfig.pages.pdf.description;
+      } else if (activePdfTool === "merge") {
+        currentPageTitle = seoConfig.pages.merge.title;
+        currentPageDesc = seoConfig.pages.merge.description;
+      } else if (activePdfTool === "compress") {
+        currentPageTitle = seoConfig.pages.compress.title;
+        currentPageDesc = seoConfig.pages.compress.description;
+      } else if (activePdfTool === "imgToPdf") {
+        currentPageTitle = seoConfig.pages.imgToPdf.title;
+        currentPageDesc = seoConfig.pages.imgToPdf.description;
+      } else if (activePdfTool === "organize") {
+        currentPageTitle = seoConfig.pages.organize.title;
+        currentPageDesc = seoConfig.pages.organize.description;
+      } else if (activePdfTool === "deleteRotate") {
+        currentPageTitle = "Excluir e Girar Páginas de PDF | SomDrive";
+        currentPageDesc = "Exclua páginas indesejadas e gire orientações de páginas de seus documentos PDF online de forma gratuita e rápida.";
+      }
+    }
+
+    // Apply titles and meta tags
+    document.title = currentPageTitle;
+
+    // Helper to set or create meta tags
+    const setMetaTag = (attribute: string, value: string, content: string) => {
+      let element = document.querySelector(`meta[${attribute}="${value}"]`);
+      if (!element) {
+        element = document.createElement("meta");
+        element.setAttribute(attribute, value);
+        document.head.appendChild(element);
+      }
+      element.setAttribute("content", content);
+    };
+
+    setMetaTag("name", "description", currentPageDesc);
+    setMetaTag("property", "og:title", currentPageTitle);
+    setMetaTag("property", "og:description", currentPageDesc);
+    setMetaTag("property", "og:image", seoConfig.ogImage || "https://somdrive.com/og-image.jpg");
+    setMetaTag("property", "og:site_name", seoConfig.siteName || "Conversor SomDrive");
+    setMetaTag("property", "og:locale", "pt_BR");
+    setMetaTag("property", "og:type", "website");
+    setMetaTag("name", "robots", seoConfig.robots || "index, follow");
+    setMetaTag("name", "twitter:card", seoConfig.twitterCard || "summary_large_image");
+
+    // Canonical link
+    let canonicalElement = document.querySelector('link[rel="canonical"]');
+    if (!canonicalElement) {
+      canonicalElement = document.createElement("link");
+      canonicalElement.setAttribute("rel", "canonical");
+      document.head.appendChild(canonicalElement);
+    }
+    canonicalElement.setAttribute("href", seoConfig.canonical || "https://somdrive.com");
+  }, [activeTab, activePdfTool, seoConfig]);
+
+  const getActiveAdsByPosition = (position: string) => {
+    return ads.filter(ad => ad.position === position && !failedAdIds.includes(ad.id));
+  };
+
+  const getActiveAdByPosition = (position: string) => {
+    const activeAds = getActiveAdsByPosition(position);
+    return activeAds.length > 0 ? activeAds[0] : null;
+  };
+
+  const renderAdsArea = (position: string) => {
+    const activeAds = getActiveAdsByPosition(position);
+    if (activeAds.length === 0) return null;
+
+    const sidebarPositions = ["sidebar_top", "sidebar_middle", "sidebar_bottom"];
+    const isSidebarArea = sidebarPositions.includes(position);
+
+    if (isSidebarArea) {
+      return (
+        <div className="w-full flex flex-col gap-6 items-center" id={`ads-area-${position}`}>
+          {activeAds.map(ad => (
+            <PublicAdCard
+              key={ad.id}
+              ad={ad}
+              position={position}
+              onImageError={(id) => setFailedAdIds(prev => [...prev, id])}
+            />
+          ))}
+        </div>
+      );
+    }
+
+    // For horizontal areas (below_how_it_works, below_pdf_tools, page_bottom)
+    return (
+      <div className="w-full py-6 px-1 flex flex-col items-center justify-center gap-6" id={`ads-area-${position}`}>
+        {activeAds.map(ad => (
+          <div key={ad.id} className="w-full max-w-[1220px] flex justify-center">
+            <PublicAdCard
+              ad={ad}
+              position={position}
+              onImageError={(id) => setFailedAdIds(prev => [...prev, id])}
+            />
+          </div>
+        ))}
+      </div>
+    );
+  };
+
+  const handleNavigate = (tab: TabType) => {
+    setActiveTab(tab);
+    if (tab !== "pdf") {
+      setActivePdfTool("none");
+    }
+    if (mainContentRef.current) {
+      mainContentRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+    } else {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  };
+
+  const handleNavigateToPdfTool = (tool: string) => {
+    setActivePdfTool(tool);
+    setActiveTab("pdf");
+    if (mainContentRef.current) {
+      mainContentRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+    } else {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  };
+
+  const handleScrollToSection = (id: string) => {
+    const element = document.getElementById(id);
+    if (element) {
+      element.scrollIntoView({ behavior: "smooth" });
+    }
+  };
+
+  if (currentPath === "/admin-login") {
+    return <AdminLogin onNavigate={navigateTo} />;
+  }
+
+  if (currentPath === "/admin") {
+    return <AdminPanel onNavigate={navigateTo} />;
+  }
+
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 font-sans flex flex-col justify-between selection:bg-emerald-500/30 selection:text-emerald-200">
+    <div className="min-h-screen bg-bg-main text-text-main font-sans flex flex-col justify-between selection:bg-green-primary/20 selection:text-green-light">
+      
+      {/* Mobile Device Alert Overlay */}
+      <AnimatePresence>
+        {isMobile && !dismissedMobileWarning && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-bg-main/80 backdrop-blur-md"
+            id="mobile-warning-overlay"
+          >
+            <motion.div 
+              initial={{ scale: 0.95, y: 15 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.95, y: 15 }}
+              className="bg-card-main rounded-[28px] border border-border-main shadow-2xl max-w-lg w-full p-6 md:p-8 space-y-6 relative overflow-hidden text-text-main"
+            >
+              <div className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-amber-500 to-yellow-400" />
+              
+              <div className="flex items-start gap-4">
+                <div className="p-3 bg-card-inner border border-border-main text-amber-500 rounded-2xl shrink-0">
+                  <Smartphone className="h-6 w-6" />
+                </div>
+                <div className="space-y-2">
+                  <h2 className="font-display font-extrabold text-[18px] md:text-[20px] text-text-main leading-tight">
+                    Aviso: Otimizado para Computador
+                  </h2>
+                  <p className="text-[14px] md:text-[15px] text-text-sec font-semibold leading-relaxed">
+                    Esta ferramenta foi desenvolvida para rodar diretamente no processador do seu dispositivo. Para melhor experiência e estabilidade, utilize em um computador.
+                  </p>
+                </div>
+              </div>
+
+              <div className="bg-card-inner rounded-2xl border border-border-main p-4 space-y-3.5 text-[13px] md:text-[14px] text-amber-500/90 font-medium">
+                <p className="font-bold text-amber-400 flex items-center gap-1.5">
+                  <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0" />
+                  Limitações em celulares e tablets:
+                </p>
+                <ul className="space-y-2 pl-2 text-text-sec">
+                  <li className="flex items-start gap-2">
+                    <span className="text-amber-500 mt-0.5">•</span>
+                    <span><strong>Arquivos Grandes:</strong> Processamento de múltiplos arquivos pesados na memória RAM do celular pode encerrar a aba.</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-amber-500 mt-0.5">•</span>
+                    <span><strong>PDFs Complexos:</strong> Junção ou compressão de PDFs grandes exige alto uso de CPU local do aparelho.</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-amber-500 mt-0.5">•</span>
+                    <span><strong>Dispositivos iOS (iPhone):</strong> Restrições do sistema para downloads de arquivos ZIP e PDFs complexos.</span>
+                  </li>
+                </ul>
+              </div>
+
+              <div className="flex flex-col gap-2 pt-2">
+                <button
+                  onClick={() => setDismissedMobileWarning(true)}
+                  className="w-full py-3.5 bg-green-primary hover:bg-green-dark text-white rounded-xl font-extrabold text-[15px] md:text-[16px] transition-all cursor-pointer shadow-md shadow-emerald-950/10 active:scale-[0.99] duration-150"
+                >
+                  Continuar mesmo assim
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
       
       {/* Top Header */}
-      <header className="border-b border-slate-900/60 bg-slate-950/80 backdrop-blur-md sticky top-0 z-50 px-4 py-4 md:px-8">
-        <div className="max-w-5xl mx-auto flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <div className="p-2.5 bg-emerald-500/10 rounded-xl border border-emerald-500/20 text-emerald-400">
-              <Volume2 className="h-6 w-6 animate-pulse" id="logo-icon" />
-            </div>
+      <header className="bg-bg-sec border-b border-border-main sticky top-0 z-50 px-4 py-4 md:px-8 shadow-md backdrop-blur-md">
+        <div className="max-w-[1220px] mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
+          <div 
+            className="flex items-center space-x-3.5 cursor-pointer group"
+            onClick={() => { navigateTo("/"); handleNavigate("inicio"); }}
+          >
+            {seoConfig.siteLogoUrl ? (
+              <div className="w-12 h-12 bg-card-inner rounded-xl border border-border-main overflow-hidden shadow-inner flex items-center justify-center p-1 group-hover:scale-105 transition-transform duration-300">
+                <img 
+                  src={seoConfig.siteLogoUrl.startsWith("data:") || seoConfig.siteLogoUrl.startsWith("/") ? seoConfig.siteLogoUrl : `/api/ads-public-image?url=${encodeURIComponent(seoConfig.siteLogoUrl)}`} 
+                  alt={seoConfig.siteTitle || seoConfig.siteName || "Logo"} 
+                  className="max-w-full max-h-full object-contain"
+                  referrerPolicy="no-referrer"
+                />
+              </div>
+            ) : (
+              <div className="p-2.5 bg-card-inner rounded-xl border border-border-main text-green-primary shadow-inner transition-transform duration-300 group-hover:scale-105">
+                <Volume2 className="h-6 w-6 animate-pulse" id="logo-icon" />
+              </div>
+            )}
             <div>
-              <h1 className="font-display font-bold text-lg tracking-tight text-slate-100" id="header-title">
-                Som Leve
+              <h1 className="font-display font-extrabold text-[18px] md:text-[22px] tracking-tight text-text-main flex items-center gap-2 leading-tight" id="header-title">
+                {seoConfig.siteTitle || seoConfig.siteName || "Conversor SunDrive"}
               </h1>
-              <p className="text-xs text-slate-400 font-medium" id="header-subtitle">
-                Conversor de Áudio Grátis
+              <p className="text-[11px] md:text-[12px] text-text-muted font-semibold mt-0.5" id="header-subtitle">
+                {seoConfig.siteSubtitle !== undefined && seoConfig.siteSubtitle !== "" 
+                  ? seoConfig.siteSubtitle 
+                  : "Ferramentas para áudio e PDF."}
               </p>
             </div>
           </div>
           
-          <div className="flex items-center space-x-2 text-xs bg-slate-900/80 px-3 py-1.5 rounded-full border border-slate-800/60">
-            <ShieldCheck className="h-4 w-4 text-emerald-400" id="shield-icon" />
-            <span className="text-slate-300 font-medium" id="privacy-badge">Conversão 100% Local</span>
+          {/* Navigation Links */}
+          <nav className="flex items-center space-x-6 text-[13px] md:text-[14px] font-extrabold uppercase tracking-wider text-text-sec" id="header-nav">
+            <button 
+              onClick={() => handleNavigate("inicio")} 
+              className={`hover:text-green-light transition-colors cursor-pointer relative py-1 ${activeTab === "inicio" ? "text-green-light" : ""}`}
+            >
+              Início
+              {activeTab === "inicio" && <span className="absolute bottom-0 left-0 w-full h-0.5 bg-green-primary rounded-full" />}
+            </button>
+            <button 
+              onClick={() => handleNavigate("audio")} 
+              className={`hover:text-green-light transition-colors cursor-pointer relative py-1 ${activeTab === "audio" ? "text-green-light" : ""}`}
+            >
+              Converter Áudio
+              {activeTab === "audio" && <span className="absolute bottom-0 left-0 w-full h-0.5 bg-green-primary rounded-full" />}
+            </button>
+            <button 
+              onClick={() => handleNavigate("pdf")} 
+              className={`hover:text-green-light transition-colors cursor-pointer relative py-1 ${activeTab === "pdf" ? "text-green-light" : ""}`}
+            >
+              Ferramentas PDF
+              {activeTab === "pdf" && <span className="absolute bottom-0 left-0 w-full h-0.5 bg-green-primary rounded-full" />}
+            </button>
+            <button 
+              onClick={() => handleScrollToSection("como-funciona")}
+              className="hover:text-green-light transition-colors cursor-pointer uppercase py-1"
+            >
+              Como funciona
+            </button>
+          </nav>
+ 
+          <div className="flex items-center space-x-2">
+            {/* Keeping it simple and clean */}
           </div>
         </div>
       </header>
 
-      {/* Main Area */}
-      <main className="flex-grow max-w-3xl w-full mx-auto px-4 py-10 md:py-14 space-y-8">
+      {/* Main Workspace Grid */}
+      <main className="flex-grow max-w-[1380px] w-full mx-auto px-4 py-8 md:py-12 space-y-12" ref={mainContentRef}>
         
-        {/* Dropzone & Queue Converter Area */}
-        <div className="space-y-6">
-          
-          {/* Main Card */}
-          <div className="bg-slate-900/40 rounded-3xl border border-slate-900 p-6 md:p-8 shadow-2xl backdrop-blur-sm relative overflow-hidden" id="main-converter-card">
-            <div className="absolute -top-32 -right-32 w-64 h-64 bg-emerald-500/5 rounded-full blur-3xl pointer-events-none" />
+        {(() => {
+          const sidebarTopAds = getActiveAdsByPosition("sidebar_top");
+          const sidebarMiddleAds = getActiveAdsByPosition("sidebar_middle");
+          const sidebarBottomAds = getActiveAdsByPosition("sidebar_bottom");
+          const hasSidebarAds = sidebarTopAds.length > 0 || sidebarMiddleAds.length > 0 || sidebarBottomAds.length > 0;
 
-            {/* Title Block */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between pb-6 border-b border-slate-900 gap-3" id="title-block">
-              <div>
-                <h2 className="font-display text-xl font-bold text-slate-100" id="main-title">
-                  Fila de Conversão em Lote
-                </h2>
-                <p className="text-xs text-slate-400 mt-0.5" id="main-subtitle">
-                  Selecione até 15 arquivos • Máx 50MB por arquivo • Máx 150MB por lote
-                </p>
-              </div>
+          return (
+            /* Layout Grid: Left (Main Card) & Right (Ads Sidebar) */
+            <div className="grid grid-cols-1 lg:grid-cols-4 gap-8 items-start">
               
-              {queueLength > 0 && (
-                <button
-                  onClick={clearQueue}
-                  className="text-xs font-semibold text-rose-400 hover:text-rose-300 transition-colors py-1 px-3 bg-rose-500/5 border border-rose-500/10 rounded-lg hover:bg-rose-500/10 flex items-center space-x-1.5 self-start md:self-auto"
-                  id="btn-clear-all"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                  <span>Limpar Fila</span>
-                </button>
-              )}
-            </div>
-
-            {/* Queue Statistics Header */}
-            {queueLength > 0 && (
-              <div className="grid grid-cols-3 gap-3 py-4 text-center border-b border-slate-900 bg-slate-950/20 rounded-xl px-4 mt-4" id="stats-banner">
-                <div className="space-y-0.5">
-                  <p className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Arquivos</p>
-                  <p className="text-sm font-bold text-emerald-400">{completedCount} / {queueLength}</p>
-                </div>
-                <div className="space-y-0.5">
-                  <p className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Original</p>
-                  <p className="text-sm font-bold text-slate-300 font-mono">{formatBytes(totalOriginalBytes, 1)}</p>
-                </div>
-                <div className="space-y-0.5">
-                  <p className="text-[10px] text-slate-500 uppercase font-bold tracking-wider font-bold">Economia</p>
-                  <p className="text-sm font-bold text-emerald-400 font-mono">{spaceSavings > 0 ? `${spaceSavings}%` : "0%"}</p>
-                </div>
-              </div>
-            )}
-
-            {/* Drag & Dropzone */}
-            <form 
-              onDragEnter={handleDrag}
-              onDragOver={handleDrag}
-              onDragLeave={handleDrag}
-              onDrop={handleDrop}
-              onSubmit={(e) => e.preventDefault()}
-              onClick={triggerFileInput}
-              className={`mt-6 border-2 border-dashed rounded-2xl p-6 md:p-10 text-center cursor-pointer transition-all duration-200 flex flex-col items-center justify-center space-y-4 group ${
-                dragActive 
-                  ? "border-emerald-500 bg-emerald-500/5 scale-[0.99]" 
-                  : "border-slate-800 bg-slate-950/40 hover:border-slate-700/80 hover:bg-slate-950/60"
-              }`}
-              id="upload-dropzone"
-            >
-              <input 
-                ref={fileInputRef}
-                type="file" 
-                multiple
-                className="hidden" 
-                accept=".mp3,.wav,.m4a,.aac,.flac,.ogg,.opus,.wma,.amr,.aiff,.aif,.caf,.ac3,.mp2,.mp1,.pcm,.au,.snd,.mp4,.mpeg,.mpg,.mov,.avi,.mkv,.webm,.3gp,.3g2,.mts,.m2ts,.ts,.flv,.wmv,.vob,audio/*,video/*"
-                onChange={handleChange}
-              />
-              
-              <div className="p-3 bg-slate-900/85 rounded-xl border border-slate-800 group-hover:scale-105 transition-transform duration-200 text-slate-400 group-hover:text-emerald-400">
-                <Upload className="h-6 w-6" id="upload-icon" />
-              </div>
-
-              <div className="space-y-1">
-                <p className="text-sm font-semibold text-slate-200" id="upload-text-main">
-                  Clique ou arraste de 1 até 15 arquivos para converter
-                </p>
-                <p className="text-xs text-slate-400 font-medium" id="upload-text-sub-main">
-                  Compatível com os principais formatos de áudio e arquivos de vídeo que contenham som.
-                </p>
-                <p className="text-[11px] text-slate-500" id="upload-text-sub">
-                  O suporte pode variar conforme o codec e o navegador utilizado. Limite de 50 MB por arquivo.
-                </p>
-              </div>
-            </form>
-
-            {/* Global Error Banner */}
-            {globalError && (
-              <div className="mt-4 p-4 bg-rose-500/10 border border-rose-500/20 rounded-2xl flex items-start space-x-3 text-left animate-shake" id="global-error-alert">
-                <AlertCircle className="h-5 w-5 text-rose-400 mt-0.5 shrink-0" id="error-icon" />
-                <div className="min-w-0 flex-1">
-                  <h4 className="text-xs font-bold text-rose-400 uppercase tracking-wider">Aviso</h4>
-                  <p className="text-xs text-rose-300/90 leading-relaxed mt-0.5" id="global-error-message">
-                    {globalError}
-                  </p>
-                </div>
-                <button onClick={() => setGlobalError(null)} className="text-slate-400 hover:text-slate-200 shrink-0">
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
-            )}
-
-            {/* Queue List */}
-            <div className="mt-6 space-y-3 max-h-[420px] overflow-y-auto pr-1" id="queue-list-container">
-              {queue.length === 0 ? (
-                <div className="text-center py-10 text-slate-500 border border-slate-900/40 rounded-2xl bg-slate-950/20" id="empty-queue-message">
-                  <FileAudio className="h-8 w-8 mx-auto text-slate-700 mb-2" />
-                  <p className="text-xs font-semibold">Nenhum arquivo na fila de conversão</p>
-                  <p className="text-[10px] text-slate-600 mt-1">Selecione arquivos acima para começar</p>
-                </div>
-              ) : (
-                queue.map((item, index) => {
-                  const isCurrent = index === currentProcessingIndex;
-                  const itemSavings = item.originalSize && item.convertedSize && item.originalSize > item.convertedSize
-                    ? Math.round(((item.originalSize - item.convertedSize) / item.originalSize) * 100)
-                    : null;
-
-                  return (
-                    <div 
-                      key={item.id}
-                      className={`p-4 rounded-2xl border transition-all duration-200 flex flex-col md:flex-row md:items-center justify-between gap-3 relative ${
-                        isCurrent 
-                          ? "bg-emerald-950/20 border-emerald-500/50" 
-                          : item.status === "concluido" 
-                          ? "bg-emerald-950/10 border-emerald-500/20" 
-                          : item.status === "erro"
-                          ? "bg-rose-950/10 border-rose-500/20"
-                          : "bg-slate-950/40 border-slate-900 hover:border-slate-800"
-                      }`}
-                      id={`queue-item-${item.id}`}
-                    >
-                      <div className="flex items-center space-x-3.5 min-w-0 flex-1">
-                        <div className={`p-2.5 rounded-xl border ${
-                          item.status === "concluido"
-                            ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
-                            : item.status === "erro"
-                            ? "bg-rose-500/10 border-rose-500/20 text-rose-400"
-                            : "bg-slate-900 border-slate-800 text-slate-400"
-                        }`}>
-                          <FileAudio className="h-5 w-5" />
-                        </div>
-                        
-                        <div className="min-w-0 flex-1">
-                          <p className="text-xs font-semibold text-slate-200 truncate" id={`name-${item.id}`}>
-                            {item.name}
-                          </p>
-                          <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 mt-1 text-[10px] text-slate-500 font-medium">
-                            <span className="font-mono font-bold text-slate-400">{item.format}</span>
-                            <span>•</span>
-                            <span>{formatBytes(item.originalSize)}</span>
-                            {item.duration !== null && (
-                              <>
-                                <span>•</span>
-                                <span className="flex items-center space-x-1">
-                                  <Clock className="h-3 w-3" />
-                                  <span>{formatDuration(item.duration)}</span>
-                                </span>
-                              </>
-                            )}
-                            {item.convertedSize && (
-                              <>
-                                <span>•</span>
-                                <span className="text-emerald-400 font-bold font-mono">Convertido: {formatBytes(item.convertedSize)}</span>
-                                {itemSavings && (
-                                  <span className="text-emerald-400 font-bold font-mono">({itemSavings}% menor)</span>
-                                )}
-                              </>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Status / Actions Area */}
-                      <div className="flex items-center justify-between md:justify-end gap-3 shrink-0">
-                        
-                        {/* Status Message Text */}
-                        <div className="text-right">
-                          {item.status === "aguardando" && (
-                            <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wide">Aguardando</span>
-                          )}
-                          {item.status === "preparando" && (
-                            <span className="text-[10px] text-emerald-400 font-bold uppercase tracking-wide flex items-center space-x-1">
-                              <RefreshCw className="h-3 w-3 animate-spin" />
-                              <span>Processando...</span>
-                            </span>
-                          )}
-                          {item.status === "convertendo" && (
-                            <span className="text-[10px] text-emerald-400 font-bold uppercase tracking-wide flex items-center space-x-1">
-                              <RefreshCw className="h-3 w-3 animate-spin" />
-                              <span>{item.progress}%</span>
-                            </span>
-                          )}
-                          {item.status === "concluido" && (
-                            <span className="text-[10px] text-emerald-400 font-bold uppercase tracking-wide flex items-center space-x-1">
-                              <CheckCircle2 className="h-3 w-3" />
-                              <span>Pronto</span>
-                            </span>
-                          )}
-                          {item.status === "cancelado" && (
-                            <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wide">Cancelado</span>
-                          )}
-                          {item.status === "erro" && (
-                            <span className="text-[10px] text-rose-400 font-bold uppercase tracking-wide flex items-center space-x-1" title={item.errorMessage || "Erro desconhecido"}>
-                              <AlertCircle className="h-3 w-3" />
-                              <span>Erro</span>
-                            </span>
-                          )}
-                        </div>
-
-                        {/* Individual Download/Remove Buttons */}
-                        <div className="flex items-center space-x-1.5">
-                          {item.status === "concluido" && item.convertedBlobUrl && (
-                            <a
-                              href={item.convertedBlobUrl}
-                              download={item.convertedFileName || "convertido.mp3"}
-                              className="p-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 hover:border-emerald-500/40 text-emerald-400 hover:text-emerald-300 rounded-lg transition-colors"
-                              title="Baixar este arquivo convertido"
-                              id={`dl-${item.id}`}
-                            >
-                              <Download className="h-4 w-4" />
-                            </a>
-                          )}
-
-                          {!isProcessing && (
-                            <button
-                              onClick={() => removeItem(item.id)}
-                              className="p-1.5 bg-slate-950/80 hover:bg-rose-500/10 border border-slate-900 hover:border-rose-500/20 text-slate-500 hover:text-rose-400 rounded-lg transition-colors"
-                              title="Remover da lista"
-                              id={`rm-${item.id}`}
-                            >
-                              <X className="h-4 w-4" />
-                            </button>
-                          )}
-                        </div>
-
-                      </div>
-
-                      {/* Error details inside the list item */}
-                      {item.status === "erro" && item.errorMessage && (
-                        <div className="w-full text-[10px] text-rose-400 font-medium pt-1 mt-1 border-t border-rose-500/5 leading-normal md:hidden">
-                          * {item.errorMessage}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })
-              )}
-            </div>
-
-            {/* Download All ZIP Actions */}
-            {completedCount >= 2 && !isProcessing ? (
-              <div className="mt-6 pt-5 border-t border-slate-900/60 flex flex-col sm:flex-row gap-3" id="zip-action-container">
-                <button
-                  onClick={() => handleDownloadAllZip()}
-                  disabled={isGeneratingZip}
-                  className="flex-1 px-6 py-3.5 text-sm font-bold rounded-xl text-white bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 active:scale-[0.99] transition-all duration-150 flex items-center justify-center space-x-2 h-13 shadow-lg shadow-emerald-950/20 disabled:opacity-50 disabled:cursor-not-allowed disabled:scale-100 cursor-pointer"
-                  id="btn-download-all-zip"
-                >
-                  {isGeneratingZip ? (
-                    <>
-                      <RefreshCw className="h-4 w-4 animate-spin text-white" />
-                      <span>Preparando download de {completedCount} arquivos...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Download className="h-4 w-4" />
-                      <span>Baixar todos os {completedCount} arquivos</span>
-                    </>
-                  )}
-                </button>
-                <button
-                  onClick={clearQueue}
-                  className="px-6 py-3.5 text-sm font-bold rounded-xl bg-slate-950 text-slate-400 border border-slate-900 hover:border-slate-800 hover:text-slate-300 transition-all duration-150 h-13 flex items-center justify-center space-x-2 cursor-pointer"
-                  id="btn-convert-new-batch"
-                >
-                  <RefreshCw className="h-4 w-4" />
-                  <span>Converter novos arquivos</span>
-                </button>
-              </div>
-            ) : completedCount === 1 && queueLength === 1 && !isProcessing ? (
-              <div className="mt-6 pt-5 border-t border-slate-900/60 flex flex-col sm:flex-row gap-3" id="zip-action-container">
-                <button
-                  onClick={clearQueue}
-                  className="w-full px-6 py-3.5 text-sm font-bold rounded-xl bg-slate-950 text-slate-400 border border-slate-900 hover:border-slate-800 hover:text-slate-300 transition-all duration-150 h-13 flex items-center justify-center space-x-2 cursor-pointer"
-                  id="btn-convert-new-batch"
-                >
-                  <RefreshCw className="h-4 w-4" />
-                  <span>Converter novos arquivos</span>
-                </button>
-              </div>
-            ) : null}
-
-            {/* Queue Control Buttons */}
-            {queueLength > 0 && (isProcessing || queue.some(item => item.status === "aguardando" || item.status === "cancelado" || item.status === "erro")) && (
-              <div className="mt-6 pt-5 border-t border-slate-900 space-y-4" id="action-buttons-box">
-                
-                {/* Global conversion progress text */}
-                {isProcessing && (
-                  <div className="flex items-center justify-between text-xs text-slate-400 font-medium">
-                    <span className="flex items-center space-x-1.5">
-                      <RefreshCw className="h-3.5 w-3.5 animate-spin text-emerald-400" />
-                      <span>Convertendo item <strong>{currentProcessingIndex + 1}</strong> de <strong>{queueLength}</strong></span>
-                    </span>
-                    <span className="font-semibold text-emerald-400 font-mono">
-                      Fila em andamento
-                    </span>
-                  </div>
-                )}
-
-                <div className="flex flex-col sm:flex-row gap-3">
-                  {isProcessing ? (
-                    <button
-                      onClick={cancelQueue}
-                      className="w-full px-5 py-3 text-sm font-bold rounded-xl bg-slate-950 text-slate-400 border border-slate-900 hover:border-rose-500/20 hover:bg-rose-500/5 hover:text-rose-400 transition-all duration-150 h-12 flex items-center justify-center space-x-2"
-                      id="btn-cancel-conversion"
-                    >
-                      <X className="h-4 w-4" />
-                      <span>Cancelar Conversão</span>
-                    </button>
-                  ) : (
-                    <>
-                      <button
-                        onClick={startBatchConversion}
-                        disabled={queue.length === 0}
-                        className={`w-full px-6 py-3.5 text-sm font-bold rounded-xl text-white shadow-xl transition-all duration-150 flex items-center justify-center space-x-2 h-13 ${
-                          queue.length > 0
-                            ? "bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 active:scale-[0.99] cursor-pointer" 
-                            : "bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-900"
-                        }`}
-                        id="btn-start-batch"
-                      >
-                        <Play className="h-4 w-4" />
-                        <span>Converter todos para MP3 96 kbps</span>
-                      </button>
-                    </>
-                  )}
-                </div>
-              </div>
-            )}
-
-          </div>
-
-        </div>
-
-        {/* Explanation Section below the main card */}
-        <section className="bg-slate-900/25 rounded-3xl border border-slate-900/60 p-6 md:p-8 space-y-6 relative overflow-hidden" id="benefits-section">
-          <div className="absolute -top-12 -left-12 w-32 h-32 bg-emerald-500/5 rounded-full blur-2xl pointer-events-none" />
-          
-          <div className="text-center max-w-2xl mx-auto space-y-2">
-            <h3 className="font-display text-xl md:text-2xl font-bold tracking-tight text-emerald-400" id="benefits-title">
-              Áudio mais leve com o Som Leve
-            </h3>
-            <p className="text-xs md:text-sm text-slate-400 leading-relaxed" id="benefits-subtitle">
-              Converta seus arquivos de áudio para MP3 96 kbps e deixe suas músicas muito mais leves, rápidas para carregar e fáceis de tocar em qualquer dispositivo ou plataforma de armazenamento como o SomDrive.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2" id="benefits-grid">
-            {/* Benefit 1 */}
-            <div className="bg-slate-950/40 p-5 rounded-2xl border border-slate-900/80 hover:border-emerald-500/10 transition-all duration-200 flex flex-col space-y-2" id="benefit-card-1">
-              <div className="flex items-center space-x-2">
-                <span className="p-1.5 bg-emerald-500/10 text-emerald-400 rounded-lg border border-emerald-500/20 text-xs font-bold shrink-0">01</span>
-                <h4 className="text-sm font-semibold text-slate-200">Mais leve</h4>
-              </div>
-              <p className="text-xs text-slate-400 leading-relaxed">
-                Arquivos menores para subir e reproduzir com mais facilidade.
-              </p>
-            </div>
-
-            {/* Benefit 2 */}
-            <div className="bg-slate-950/40 p-5 rounded-2xl border border-slate-900/80 hover:border-emerald-500/10 transition-all duration-200 flex flex-col space-y-2" id="benefit-card-2">
-              <div className="flex items-center space-x-2">
-                <span className="p-1.5 bg-emerald-500/10 text-emerald-400 rounded-lg border border-emerald-500/20 text-xs font-bold shrink-0">02</span>
-                <h4 className="text-sm font-semibold text-slate-200">Mais rápido</h4>
-              </div>
-              <p className="text-xs text-slate-400 leading-relaxed">
-                Menos tempo de carregamento no celular e no computador.
-              </p>
-            </div>
-
-            {/* Benefit 3 */}
-            <div className="bg-slate-950/40 p-5 rounded-2xl border border-slate-900/80 hover:border-emerald-500/10 transition-all duration-200 flex flex-col space-y-2" id="benefit-card-3">
-              <div className="flex items-center space-x-2">
-                <span className="p-1.5 bg-emerald-500/10 text-emerald-400 rounded-lg border border-emerald-500/20 text-xs font-bold shrink-0">03</span>
-                <h4 className="text-sm font-semibold text-slate-200">Ideal para demos</h4>
-              </div>
-              <p className="text-xs text-slate-400 leading-relaxed">
-                Qualidade suficiente para apresentar voz, melodia e harmonia com clareza.
-              </p>
-            </div>
-          </div>
-
-          <div className="pt-4 border-t border-slate-900/60 flex flex-col md:flex-row items-center justify-between gap-4" id="benefits-footer-box">
-            <p className="text-xs text-emerald-400 font-semibold text-center md:text-left">
-              Menos peso no arquivo. Mais fluidez na reprodução. Melhor experiência no SomDrive.
-            </p>
+              {/* Left Column: Conversor & PDF Main Card */}
+              <div className={`${hasSidebarAds ? "lg:col-span-3" : "lg:col-span-4"} space-y-6`}>
             
-            <div className="flex items-center space-x-2 shrink-0 bg-slate-950/60 px-3 py-1.5 rounded-xl border border-slate-900">
-              <span className="text-[10px] uppercase font-bold tracking-wider text-slate-500">SomDrive PRO</span>
-              <a 
-                href="https://somdrive.com.br" 
-                target="_blank" 
-                rel="noreferrer"
-                className="text-xs text-emerald-400 font-bold hover:text-emerald-300 transition-colors flex items-center space-x-1"
-                id="somdrive-footer-btn"
-              >
-                <span>Acessar plataforma</span>
-                <ArrowRight className="h-3 w-3" />
-              </a>
+            <AnimatePresence mode="wait">
+              {activeTab === "inicio" && (
+                <motion.div
+                  key="inicio-view"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  className="space-y-8"
+                >
+                  {/* Hero Welcome Banner */}
+                  <div className="text-center max-w-2xl mx-auto space-y-4 py-4">
+                    <div className="inline-flex items-center space-x-2 bg-[#2B333B] border border-border-main px-4 py-1.5 rounded-full text-xs font-semibold text-[#39D977]">
+                      <Sparkles className="h-3.5 w-3.5 animate-pulse" />
+                      <span>Ferramentas de Conversão</span>
+                    </div>
+                    
+                    <h2 className="font-display text-3xl md:text-4xl font-extrabold tracking-tight text-text-main" id="home-title">
+                      Conversor de Áudio e Ferramentas PDF
+                    </h2>
+                    
+                    <p className="text-sm text-text-sec leading-relaxed max-w-xl mx-auto font-semibold" id="home-subtitle">
+                      Seus arquivos são processados 100% localmente no seu próprio navegador para total privacidade.
+                    </p>
+                  </div>
+
+                  {/* Two Main Cards Grid */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl mx-auto" id="categories-grid">
+                    
+                    {/* Card 1: Audio Converter */}
+                    <div
+                      className="bg-card-main rounded-[28px] border border-border-main p-6 md:p-8 flex flex-col justify-between shadow-sm hover:shadow-md hover:border-green-primary transition-all duration-300 group cursor-pointer"
+                      onClick={() => handleNavigate("audio")}
+                      id="card-audio-converter"
+                    >
+                      <div className="space-y-4">
+                        <div className="p-3.5 bg-[#303943] rounded-2xl border border-border-main text-[#39D977] inline-block group-hover:scale-105 transition-all shadow-inner">
+                          <Music className="h-6 w-6" />
+                        </div>
+                        <div>
+                          <h3 className="font-display text-lg font-bold text-text-main group-hover:text-green-light transition-colors leading-tight">
+                            Conversor de Áudio
+                          </h3>
+                          <p className="text-xs text-text-sec mt-2 leading-relaxed font-semibold">
+                            Converta seus arquivos de som para MP3 com economia inteligente de tamanho e total controle da qualidade (64kbps até 320kbps).
+                          </p>
+                        </div>
+                        <ul className="text-[11px] text-text-muted space-y-1.5 pt-2 font-semibold">
+                          <li className="flex items-center gap-1.5">
+                            <span className="w-1.5 h-1.5 bg-green-primary rounded-full" />
+                            Conversão em lote ultra-rápida
+                          </li>
+                          <li className="flex items-center gap-1.5">
+                            <span className="w-1.5 h-1.5 bg-green-primary rounded-full" />
+                            Ajuste de bitrate (64k a 320k)
+                          </li>
+                          <li className="flex items-center gap-1.5">
+                            <span className="w-1.5 h-1.5 bg-green-primary rounded-full" />
+                            Escute o original e o convertido na hora
+                          </li>
+                        </ul>
+                      </div>
+
+                      <div className="pt-6 flex items-center justify-between text-xs font-bold text-[#39D977] group-hover:translate-x-1 transition-transform border-t border-border-main mt-4">
+                        <span>Acessar Conversor</span>
+                        <ArrowRight className="h-4 w-4" />
+                      </div>
+                    </div>
+
+                    {/* Card 2: PDF Tools */}
+                    <div
+                      className="bg-card-main rounded-[28px] border border-border-main p-6 md:p-8 flex flex-col justify-between shadow-sm hover:shadow-md hover:border-green-primary transition-all duration-300 group cursor-pointer"
+                      onClick={() => handleNavigate("pdf")}
+                      id="card-pdf-tools"
+                    >
+                      <div className="space-y-4">
+                        <div className="p-3.5 bg-[#303943] rounded-2xl border border-border-main text-[#39D977] inline-block group-hover:scale-105 transition-all shadow-inner">
+                          <FileText className="h-6 w-6" />
+                        </div>
+                        <div>
+                          <h3 className="font-display text-lg font-bold text-text-main group-hover:text-green-light transition-colors leading-tight">
+                            Ferramentas PDF
+                          </h3>
+                          <p className="text-xs text-text-sec mt-2 leading-relaxed font-semibold">
+                            Reordene, junte, comprima, gire ou descarte páginas de documentos PDF em uma interface prática e 100% segura.
+                          </p>
+                        </div>
+                        <ul className="text-[11px] text-text-muted space-y-1.5 pt-2 font-semibold">
+                          <li className="flex items-center gap-1.5">
+                            <span className="w-1.5 h-1.5 bg-green-primary rounded-full" />
+                            Mesclagem e junção de múltiplos PDFs
+                          </li>
+                          <li className="flex items-center gap-1.5">
+                            <span className="w-1.5 h-1.5 bg-green-primary rounded-full" />
+                            Otimização de tamanho (Comprimir)
+                          </li>
+                          <li className="flex items-center gap-1.5">
+                            <span className="w-1.5 h-1.5 bg-green-primary rounded-full" />
+                            Girar, deletar e reorganizar páginas visualmente
+                          </li>
+                        </ul>
+                      </div>
+
+                      <div className="pt-6 flex items-center justify-between text-xs font-bold text-[#39D977] group-hover:translate-x-1 transition-transform border-t border-border-main mt-4">
+                        <span>Acessar Ferramentas PDF</span>
+                        <ArrowRight className="h-4 w-4" />
+                      </div>
+                    </div>
+
+                  </div>
+
+                  {/* Space for any other visual elements */}
+                </motion.div>
+              )}
+
+              {activeTab === "audio" && (
+                <motion.div
+                  key="audio-view"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  transition={{ duration: 0.2 }}
+                  className="bg-card-main rounded-[24px] border border-border-main shadow-lg p-6 md:p-10 text-text-main"
+                >
+                  <AudioConverter />
+                </motion.div>
+              )}
+
+              {activeTab === "pdf" && (
+                <motion.div
+                  key="pdf-view"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  transition={{ duration: 0.2 }}
+                  className="bg-card-main rounded-[24px] border border-border-main shadow-lg p-6 md:p-10 text-text-main"
+                >
+                  <PdfTools activeTool={activePdfTool as any} setActiveTool={setActivePdfTool as any} />
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+              </div>
+
+              {/* Right Column: Ads Banners (Desktop Sidebar, below on Mobile) */}
+              {hasSidebarAds && (
+                <div className="lg:col-span-1 space-y-6 flex flex-col items-center justify-start h-full w-full max-w-[300px] lg:max-w-none mx-auto">
+                  {sidebarTopAds.map(ad => (
+                    <PublicAdCard
+                      key={ad.id}
+                      ad={ad}
+                      position="sidebar_top"
+                      onImageError={(id) => setFailedAdIds(prev => [...prev, id])}
+                    />
+                  ))}
+                  {sidebarMiddleAds.map(ad => (
+                    <PublicAdCard
+                      key={ad.id}
+                      ad={ad}
+                      position="sidebar_middle"
+                      onImageError={(id) => setFailedAdIds(prev => [...prev, id])}
+                    />
+                  ))}
+                  {sidebarBottomAds.map(ad => (
+                    <PublicAdCard
+                      key={ad.id}
+                      ad={ad}
+                      position="sidebar_bottom"
+                      onImageError={(id) => setFailedAdIds(prev => [...prev, id])}
+                    />
+                  ))}
+                </div>
+              )}
+
+            </div>
+          );
+        })()}
+
+        {/* Faixa com Ferramentas PDF */}
+        <section className="bg-card-main border border-border-main rounded-[28px] p-6 md:p-8 space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-border-main pb-4">
+            <div>
+              <h3 className="font-display text-lg font-extrabold text-text-main flex items-center gap-2">
+                <span className="w-2.5 h-2.5 bg-green-primary rounded-full" />
+                Soluções PDF Online Gratuitas
+              </h3>
+              <p className="text-xs text-text-sec font-semibold mt-0.5">Sem limites de arquivos e sem necessidade de cadastro ou instalação.</p>
+            </div>
+            <button 
+              onClick={() => handleNavigate("pdf")}
+              className="text-xs text-[#39D977] hover:text-[#24C96B] font-extrabold flex items-center gap-1 cursor-pointer transition-colors"
+            >
+              Ver Todas as Ferramentas <ArrowRight className="h-4 w-4" />
+            </button>
+          </div>
+
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+            
+            {/* Tool 1: Comprimir PDF */}
+            <div 
+              onClick={() => handleNavigateToPdfTool("compress")}
+              className="bg-card-inner border border-border-main hover:border-green-primary hover:bg-lime-950/20 p-4 rounded-2xl flex flex-col justify-between space-y-3 cursor-pointer group transition-all"
+            >
+              <div className="p-2.5 bg-lime-950/40 rounded-xl border border-lime-800/30 text-lime-400 inline-block w-fit">
+                <Sparkles className="h-5 w-5" />
+              </div>
+              <div>
+                <h4 className="font-display font-extrabold text-[13px] text-text-main group-hover:text-green-light transition-colors">Comprimir PDF</h4>
+                <p className="text-[10px] text-text-sec font-medium mt-1 leading-snug">Reduza o tamanho do arquivo sem perder qualidade.</p>
+              </div>
+            </div>
+
+            {/* Tool 2: Juntar PDF */}
+            <div 
+              onClick={() => handleNavigateToPdfTool("merge")}
+              className="bg-card-inner border border-border-main hover:border-green-primary hover:bg-orange-950/20 p-4 rounded-2xl flex flex-col justify-between space-y-3 cursor-pointer group transition-all"
+            >
+              <div className="p-2.5 bg-orange-950/40 rounded-xl border border-orange-800/30 text-orange-400 inline-block w-fit">
+                <Layers className="h-5 w-5" />
+              </div>
+              <div>
+                <h4 className="font-display font-extrabold text-[13px] text-text-main group-hover:text-green-light transition-colors">Juntar PDF</h4>
+                <p className="text-[10px] text-text-sec font-medium mt-1 leading-snug">Combine múltiplos PDFs em uma única sequência.</p>
+              </div>
+            </div>
+
+            {/* Tool 3: Imagens para PDF */}
+            <div 
+              onClick={() => handleNavigateToPdfTool("imgToPdf")}
+              className="bg-card-inner border border-border-main hover:border-green-primary hover:bg-purple-950/20 p-4 rounded-2xl flex flex-col justify-between space-y-3 cursor-pointer group transition-all"
+            >
+              <div className="p-2.5 bg-purple-950/40 rounded-xl border border-purple-800/30 text-purple-400 inline-block w-fit">
+                <Image className="h-5 w-5" />
+              </div>
+              <div>
+                <h4 className="font-display font-extrabold text-[13px] text-text-main group-hover:text-green-light transition-colors">Imagens para PDF</h4>
+                <p className="text-[10px] text-text-sec font-medium mt-1 leading-snug">Converta JPG, PNG ou WEBP para PDF em segundos.</p>
+              </div>
+            </div>
+
+            {/* Tool 4: Organizar PDF */}
+            <div 
+              onClick={() => handleNavigateToPdfTool("organize")}
+              className="bg-card-inner border border-border-main hover:border-green-primary hover:bg-sky-950/20 p-4 rounded-2xl flex flex-col justify-between space-y-3 cursor-pointer group transition-all"
+            >
+              <div className="p-2.5 bg-sky-950/40 rounded-xl border border-sky-800/30 text-sky-400 inline-block w-fit">
+                <FileText className="h-5 w-5" />
+              </div>
+              <div>
+                <h4 className="font-display font-extrabold text-[13px] text-text-main group-hover:text-green-light transition-colors">Organizar PDF</h4>
+                <p className="text-[10px] text-text-sec font-medium mt-1 leading-snug">Reordene páginas arrastando e soltando.</p>
+              </div>
+            </div>
+
+            {/* Tool 5: Excluir Páginas */}
+            <div 
+              onClick={() => handleNavigateToPdfTool("deleteRotate")}
+              className="bg-card-inner border border-border-main hover:border-green-primary hover:bg-red-950/20 p-4 rounded-2xl flex flex-col justify-between space-y-3 cursor-pointer group transition-all"
+            >
+              <div className="p-2.5 bg-red-950/40 rounded-xl border border-red-800/30 text-red-400 inline-block w-fit">
+                <Scissors className="h-5 w-5" />
+              </div>
+              <div>
+                <h4 className="font-display font-extrabold text-[13px] text-text-main group-hover:text-green-light transition-colors">Excluir Páginas</h4>
+                <p className="text-[10px] text-text-sec font-medium mt-1 leading-snug">Delete páginas desnecessárias do seu arquivo PDF.</p>
+              </div>
+            </div>
+
+            {/* Tool 6: Girar Páginas */}
+            <div 
+              onClick={() => handleNavigateToPdfTool("deleteRotate")}
+              className="bg-card-inner border border-border-main hover:border-green-primary hover:bg-cyan-950/20 p-4 rounded-2xl flex flex-col justify-between space-y-3 cursor-pointer group transition-all"
+            >
+              <div className="p-2.5 bg-cyan-950/40 rounded-xl border border-cyan-800/30 text-cyan-400 inline-block w-fit">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-rotate-cw h-5 w-5"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><polyline points="16 3 21 3 21 8"/></svg>
+              </div>
+              <div>
+                <h4 className="font-display font-extrabold text-[13px] text-text-main group-hover:text-green-light transition-colors">Girar Páginas</h4>
+                <p className="text-[10px] text-text-sec font-medium mt-1 leading-snug">Rotacione páginas vertical ou horizontalmente.</p>
+              </div>
+            </div>
+
+          </div>
+        </section>
+
+        {renderAdsArea("below_pdf_tools")}
+
+        {/* Como Funciona Section */}
+        <section id="como-funciona" className="bg-card-main border border-border-main rounded-[28px] p-8 md:p-10 max-w-4xl mx-auto space-y-6">
+          <div className="text-center max-w-xl mx-auto space-y-2">
+            <h3 className="font-display text-xl font-extrabold text-text-main">Como Funciona o Conversor SomDrive</h3>
+            <p className="text-xs text-text-sec font-semibold">Simplicidade e eficiência em apenas alguns passos.</p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-4">
+            <div className="bg-card-inner border border-border-main rounded-2xl p-5 space-y-3">
+              <div className="w-8 h-8 rounded-lg bg-green-primary/10 border border-green-primary/20 flex items-center justify-center text-green-primary font-extrabold text-sm">1</div>
+              <h4 className="font-display font-bold text-sm text-text-main">Adicione os Arquivos</h4>
+              <p className="text-xs text-text-sec leading-relaxed font-semibold">
+                Arraste seus arquivos de áudio ou PDF para a área de upload ou selecione-os diretamente de sua máquina.
+              </p>
+            </div>
+
+            <div className="bg-card-inner border border-border-main rounded-2xl p-5 space-y-3">
+              <div className="w-8 h-8 rounded-lg bg-green-primary/10 border border-green-primary/20 flex items-center justify-center text-green-primary font-extrabold text-sm">2</div>
+              <h4 className="font-display font-bold text-sm text-text-main">Ajuste as Opções</h4>
+              <p className="text-xs text-text-sec leading-relaxed font-semibold">
+                Escolha a qualidade ou formato de áudio desejado, ou selecione a ferramenta PDF que deseja aplicar.
+              </p>
+            </div>
+
+            <div className="bg-card-inner border border-border-main rounded-2xl p-5 space-y-3">
+              <div className="w-8 h-8 rounded-lg bg-green-primary/10 border border-green-primary/20 flex items-center justify-center text-green-primary font-extrabold text-sm">3</div>
+              <h4 className="font-display font-bold text-sm text-text-main">Baixe o Resultado</h4>
+              <p className="text-xs text-text-sec leading-relaxed font-semibold">
+                Inicie o processamento e faça o download instantâneo dos seus novos arquivos otimizados e prontos para uso.
+              </p>
             </div>
           </div>
         </section>
 
-        {/* Safety info at the very bottom */}
-        <div className="bg-slate-950/40 rounded-2xl border border-slate-900/60 p-4 flex items-start space-x-3 max-w-3xl mx-auto" id="local-security-card">
-          <Info className="h-4.5 w-4.5 text-emerald-400 mt-0.5 shrink-0" id="info-icon" />
-          <p className="text-xs text-slate-400 leading-relaxed" id="security-disclaimer">
-            Seus arquivos são processados diretamente no seu dispositivo e não ficam armazenados em nossos servidores. Ao atualizar ou fechar a aba, a memória local é 100% liberada.
-          </p>
-        </div>
+        {renderAdsArea("below_how_it_works")}
+
+        {renderAdsArea("page_bottom")}
 
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-slate-900/40 bg-slate-950 py-6 px-4 md:px-8">
-        <div className="max-w-5xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4 text-xs text-slate-500 text-center md:text-left">
-          <p id="footer-text-left">
-            &copy; {new Date().getFullYear()} Som Leve. Processado 100% local no seu navegador.
+      <footer className="bg-bg-sec text-text-sec py-10 px-4 md:px-8 border-t border-border-main">
+        <div className="max-w-[1220px] mx-auto flex flex-col md:flex-row items-center justify-between gap-4 text-[13px] text-center md:text-left">
+          <p id="footer-text-left" className="text-text-sec font-semibold">
+            &copy; {new Date().getFullYear()} Conversor SomDrive. Ferramentas para áudio e PDF.
           </p>
-          <div className="flex items-center space-x-4" id="footer-links">
-            <span className="flex items-center space-x-1.5" id="footer-link-tech">
-              <span>Tecnologia: Web Audio API & Multi-Threading Web Workers</span>
+          <div className="flex flex-col items-center md:items-end gap-1" id="footer-links">
+            <span className="text-text-sec font-semibold" id="footer-link-tech">
+              Tecnologias: Web Audio, Web Workers e pdf-lib
             </span>
+            {/* Invisible secret area for Admin login link */}
+            <div className="group/admin py-0.5">
+              <button
+                onClick={() => navigateTo("/admin-login")}
+                className="text-[10px] text-text-muted opacity-0 group-hover/admin:opacity-65 focus-visible:opacity-65 focus:outline-none transition-opacity duration-200 cursor-pointer select-none border-none bg-transparent"
+                id="admin-secret-link"
+              >
+                Admin
+              </button>
+            </div>
           </div>
         </div>
       </footer>
 
-      {/* Safety Size Warning Modal */}
-      {zipWarningType !== "none" && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm" id="zip-warning-modal">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 shadow-2xl relative space-y-4" id="zip-warning-content">
-            <div className="flex items-center space-x-3 text-amber-400">
-              <AlertCircle className="h-6 w-6" />
-              <h3 className="font-display font-bold text-base text-slate-100">
-                {zipWarningType === "warning-100" ? "Aviso de Alto Consumo" : "Aviso de Tamanho"}
-              </h3>
+      {/* Google Analytics Consent Banner */}
+      <AnimatePresence>
+        {showConsentBanner && (
+          <motion.div
+            initial={{ opacity: 0, y: 50 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 50 }}
+            className="fixed bottom-4 left-4 right-4 md:left-auto md:right-4 md:max-w-md bg-[#1E252B] border border-border-main p-5 rounded-2xl shadow-2xl z-[90] space-y-4 text-text-main"
+          >
+            <div className="space-y-1">
+              <h4 className="text-sm font-bold text-[#39D977] flex items-center gap-2">
+                <ShieldCheck className="h-4 w-4" />
+                Privacidade & Cookies
+              </h4>
+              <p className="text-xs text-text-sec leading-relaxed font-semibold">
+                Utilizamos cookies e tecnologias semelhantes para coletar dados agregados de navegação de forma 100% anônima e melhorar a sua experiência. Nenhum dado pessoal é coletado ou armazenado.
+              </p>
             </div>
-            
-            <p className="text-xs text-slate-300 leading-relaxed">
-              {zipWarningType === "warning-100" ? (
-                <>
-                  O tamanho total dos arquivos convertidos é muito alto (<strong>{formatBytes(queue.filter(item => item.status === "concluido").reduce((sum, item) => sum + (item.convertedSize || 0), 0))}</strong>). Para melhor desempenho, recomendamos baixar os arquivos individualmente na lista acima. Se preferir, você ainda pode tentar gerar o arquivo ZIP localmente.
-                </>
-              ) : (
-                <>
-                  O tamanho total dos arquivos convertidos é grande (<strong>{formatBytes(queue.filter(item => item.status === "concluido").reduce((sum, item) => sum + (item.convertedSize || 0), 0))}</strong>). A geração do arquivo ZIP pode demorar em celulares ou dispositivos com menos memória. Deseja continuar?
-                </>
-              )}
-            </p>
-
-            <div className="flex flex-col gap-2.5 pt-2">
+            <div className="flex items-center gap-3 justify-end text-xs font-bold">
               <button
-                onClick={() => handleDownloadAllZip(true)}
-                className="w-full px-4 py-2.5 text-xs font-bold bg-emerald-500 hover:bg-emerald-400 text-white rounded-xl transition-colors cursor-pointer"
-                id="btn-confirm-zip"
+                onClick={handleDeclineConsent}
+                className="px-3.5 py-2 hover:bg-[#2B333B] border border-border-main rounded-lg text-text-sec transition-colors cursor-pointer"
               >
-                {zipWarningType === "warning-100" ? "Tentar gerar ZIP mesmo assim" : "Sim, gerar ZIP"}
+                Recusar
               </button>
               <button
-                onClick={() => setZipWarningType("none")}
-                className="w-full px-4 py-2.5 text-xs font-bold bg-slate-950 border border-slate-800 text-slate-400 hover:text-slate-300 rounded-xl transition-colors cursor-pointer"
-                id="btn-cancel-zip"
+                onClick={handleAcceptConsent}
+                className="px-4 py-2 bg-[#39D977] hover:bg-[#24C96B] text-white rounded-lg transition-colors cursor-pointer shadow-md"
               >
-                {zipWarningType === "warning-100" ? "Baixar arquivos individualmente / Cancelar" : "Cancelar"}
+                Aceitar
               </button>
             </div>
-          </div>
-        </div>
-      )}
+          </motion.div>
+        )}
+      </AnimatePresence>
 
     </div>
   );
 }
+

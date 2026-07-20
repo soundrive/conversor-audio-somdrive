@@ -1,6 +1,6 @@
 {
   "name": "Som Leve",
-  "description": "Conversor SomDrive: Ferramenta profissional de conversão de áudio e extração local otimizada para computadores. Processamento rápido, seguro e privado 100% no navegador.",
+  "description": "Conversor SomDrive Local: Ferramentas profissionais de conversão de áudio e manipulação de arquivos PDF de forma 100% segura e privada diretamente no seu navegador.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

@@ -1,0 +1,71 @@
+{
+  "entities": {
+    "Admin": {
+      "title": "Admin",
+      "description": "Administrator details and authorization status",
+      "type": "object",
+      "properties": {
+        "active": {
+          "type": "boolean",
+          "description": "Indicates if the administrator is active and authorized"
+        }
+      },
+      "required": ["active"]
+    },
+    "Ad": {
+      "title": "Ad",
+      "description": "An advertisement displayed in the application sidebars",
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string",
+          "description": "Title or name of the advertisement"
+        },
+        "imageUrl": {
+          "type": "string",
+          "description": "Base64 data URI or web URL of the ad image"
+        },
+        "storagePath": {
+          "type": "string",
+          "description": "Optional Cloud Storage path for the image asset"
+        },
+        "destinationUrl": {
+          "type": "string",
+          "description": "URL to redirect the user to when they click the ad"
+        },
+        "altText": {
+          "type": "string",
+          "description": "Alternative text for accessibility"
+        },
+        "position": {
+          "type": "string",
+          "enum": ["sidebar_top", "sidebar_bottom"],
+          "description": "Position in the layout where the ad is displayed"
+        },
+        "active": {
+          "type": "boolean",
+          "description": "Whether the ad is currently active and should be displayed"
+        },
+        "startDate": {
+          "type": "string",
+          "description": "The date when the ad should start being shown"
+        },
+        "endDate": {
+          "type": "string",
+          "description": "The optional date when the ad should stop being shown"
+        }
+      },
+      "required": ["title", "imageUrl", "destinationUrl", "altText", "position", "active", "startDate"]
+    }
+  },
+  "firestore": {
+    "admins/{uid}": {
+      "schema": "Admin",
+      "description": "Administrators who have authorization to manage configurations and ads"
+    },
+    "ads/{adId}": {
+      "schema": "Ad",
+      "description": "Advertisements managed by administrators and displayed to users"
+    }
+  }
+}
