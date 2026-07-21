@@ -285,11 +285,10 @@ function getR2Client() {
 
 const app = express();
 
-async function startServer() {
-  const PORT = 3000;
+const PORT = 3000;
 
-  // Body parser
-  app.use(express.json());
+// Body parser
+app.use(express.json());
 
   // API Route: Generate presigned upload URL
   app.post("/api/ads-presigned-upload", requireAdminMiddleware, async (req, res) => {
@@ -482,7 +481,42 @@ async function startServer() {
         });
       }
       
-      const r2Config = getR2Client();
+      let r2Config;
+      try {
+        r2Config = getR2Client();
+      } catch (e: any) {
+        const isVercelProduction = process.env.VERCEL === "1" || !!process.env.VERCEL;
+        const envType = isVercelProduction ? "Production" : "Preview";
+        
+        return res.status(500).json({
+          error: "R2_CONFIGURATION_MISSING",
+          message: "Configurações do Cloudflare R2 ausentes ou incompletas no servidor.",
+          details: {
+            R2_ADS_ACCOUNT_ID: {
+              present: !!process.env.R2_ADS_ACCOUNT_ID,
+              length: process.env.R2_ADS_ACCOUNT_ID ? process.env.R2_ADS_ACCOUNT_ID.length : 0
+            },
+            R2_ADS_ACCESS_KEY_ID: {
+              present: !!process.env.R2_ADS_ACCESS_KEY_ID,
+              length: process.env.R2_ADS_ACCESS_KEY_ID ? process.env.R2_ADS_ACCESS_KEY_ID.length : 0
+            },
+            R2_ADS_SECRET_ACCESS_KEY: {
+              present: !!process.env.R2_ADS_SECRET_ACCESS_KEY,
+              length: process.env.R2_ADS_SECRET_ACCESS_KEY ? process.env.R2_ADS_SECRET_ACCESS_KEY.length : 0
+            },
+            R2_ADS_BUCKET_NAME: {
+              present: !!process.env.R2_ADS_BUCKET_NAME,
+              length: process.env.R2_ADS_BUCKET_NAME ? process.env.R2_ADS_BUCKET_NAME.length : 0
+            },
+            R2_ADS_PUBLIC_BASE_URL: {
+              present: !!process.env.R2_ADS_PUBLIC_BASE_URL,
+              length: process.env.R2_ADS_PUBLIC_BASE_URL ? process.env.R2_ADS_PUBLIC_BASE_URL.length : 0
+            },
+            environment: envType
+          }
+        });
+      }
+      
       const { s3, bucketName } = r2Config;
       
       const command = new GetObjectCommand({
@@ -805,16 +839,18 @@ async function startServer() {
 
   // Dev vs Production static asset serving
   if (process.env.NODE_ENV !== "production") {
-    console.log("[SERVER] Starting Vite in development mode...");
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: "spa"
-    });
-    app.use(vite.middlewares);
+    (async () => {
+      console.log("[SERVER] Starting Vite in development mode...");
+      const vite = await createViteServer({
+        server: { middlewareMode: true },
+        appType: "spa"
+      });
+      app.use(vite.middlewares);
 
-    app.listen(PORT, "0.0.0.0", () => {
-      console.log(`[SERVER] Express server running on http://localhost:${PORT}`);
-    });
+      app.listen(PORT, "0.0.0.0", () => {
+        console.log(`[SERVER] Express server running on http://localhost:${PORT}`);
+      });
+    })();
   } else {
     console.log("[SERVER] Starting in production mode...");
     if (!process.env.VERCEL) {
@@ -829,8 +865,5 @@ async function startServer() {
       });
     }
   }
-}
-
-startServer();
 
 export default app;

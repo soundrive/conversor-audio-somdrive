@@ -1,5 +1,5 @@
 import React from "react";
-import { Ad } from "../types";
+import { Ad, resolveAdImageSrc } from "../types";
 import { trackEvent } from "../lib/gtag";
 import { Image as ImageIcon } from "lucide-react";
 
@@ -49,13 +49,7 @@ export default function PublicAdCard({ ad, position, onImageError }: PublicAdCar
   // 1. Preferred (Proxy): ALWAYS prefer the local Express server proxy first if storagePath is available.
   // This avoids mixed content issues, bypasses iframe sandboxes, CORS blocks, and external domain AdBlockers.
   // 2. Alternative (Direct): Fallback to direct public R2 CDN url.
-  const preferredSrc = ad.storagePath
-    ? `/api/ads-public-image?path=${encodeURIComponent(ad.storagePath)}`
-    : (ad.imageUrl && (ad.imageUrl.startsWith("http://") || ad.imageUrl.startsWith("https://") || ad.imageUrl.startsWith("data:") || ad.imageUrl.startsWith("blob:") || ad.imageUrl.startsWith("/")))
-      ? ad.imageUrl
-      : ad.imageUrl 
-        ? `/api/ads-public-image?url=${encodeURIComponent(ad.imageUrl)}`
-        : "";
+  const preferredSrc = resolveAdImageSrc(ad);
 
   const alternativeSrc = ad.storagePath && ad.imageUrl && (ad.imageUrl.startsWith("http://") || ad.imageUrl.startsWith("https://"))
     ? ad.imageUrl
@@ -66,13 +60,7 @@ export default function PublicAdCard({ ad, position, onImageError }: PublicAdCar
 
   // Synchronize component state if ad changes (e.g. edited inline without full remount)
   React.useEffect(() => {
-    const preferred = ad.storagePath
-      ? `/api/ads-public-image?path=${encodeURIComponent(ad.storagePath)}`
-      : (ad.imageUrl && (ad.imageUrl.startsWith("http://") || ad.imageUrl.startsWith("https://") || ad.imageUrl.startsWith("data:") || ad.imageUrl.startsWith("blob:") || ad.imageUrl.startsWith("/")))
-        ? ad.imageUrl
-        : ad.imageUrl 
-          ? `/api/ads-public-image?url=${encodeURIComponent(ad.imageUrl)}`
-          : "";
+    const preferred = resolveAdImageSrc(ad);
     setCurrentSrc(preferred);
     setHasFailedOnce(false);
   }, [ad.imageUrl, ad.storagePath]);

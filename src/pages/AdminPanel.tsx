@@ -22,9 +22,115 @@ import {
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import { collection, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, query, orderBy, serverTimestamp, onSnapshot } from "firebase/firestore";
 import { auth, db, handleFirestoreError, OperationType } from "../firebase";
-import { Ad, SeoConfig } from "../types";
+import { Ad, SeoConfig, resolveAdImageSrc } from "../types";
 import PublicAdCard from "../components/PublicAdCard";
 import config from "../../firebase-applet-config.json";
+
+const AdThumbnail = ({ ad, posId }: { ad: any; posId: string }) => {
+  const [imgSrc, setImgSrc] = useState<string | null>(null);
+  const [errorDetails, setErrorDetails] = useState<{
+    status?: number;
+    errorType?: string;
+    message?: string;
+    src: string;
+  } | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const src = resolveAdImageSrc(ad);
+
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    setErrorDetails(null);
+
+    // If it's a data URL or base64, we don't need to fetch it
+    if (src.startsWith("data:")) {
+      setImgSrc(src);
+      setLoading(false);
+      return;
+    }
+
+    fetch(src)
+      .then(async (response) => {
+        if (!active) return;
+        if (response.ok) {
+          setImgSrc(src);
+          setLoading(false);
+        } else {
+          let errMsg = "Falha no carregamento";
+          let errType = "HTTP_ERROR";
+          try {
+            const json = await response.json();
+            errMsg = json.message || errMsg;
+            errType = json.error || errType;
+          } catch (e) {
+            try {
+              const text = await response.text();
+              if (text && text.length < 200) errMsg = text;
+            } catch (err) {}
+          }
+          setErrorDetails({
+            status: response.status,
+            errorType: errType,
+            message: errMsg,
+            src: src
+          });
+          setLoading(false);
+        }
+      })
+      .catch((err) => {
+        if (!active) return;
+        setErrorDetails({
+          errorType: "FETCH_FAILED",
+          message: err.message || String(err),
+          src: src
+        });
+        setLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [src]);
+
+  if (loading) {
+    return (
+      <div className="w-full h-full bg-card-inner flex items-center justify-center">
+        <span className="text-[8px] text-text-muted animate-pulse">Carregando…</span>
+      </div>
+    );
+  }
+
+  if (errorDetails) {
+    return (
+      <div 
+        className="w-12 h-12 bg-red-950/40 border border-red-900/50 rounded-lg flex flex-col items-center justify-center p-1 text-[7px] leading-tight text-red-400 overflow-hidden select-none" 
+        title={`ID Anúncio: ${ad.id}\nSrc Tentado: ${errorDetails.src}\nStatus do Proxy: ${errorDetails.status || "N/A"}\nCódigo de Erro: ${errorDetails.errorType || "N/A"}\nMensagem: ${errorDetails.message}`}
+      >
+        <span className="font-bold text-[8px] text-red-500 mb-0.5">ERRO</span>
+        <span className="truncate w-full text-center">ID: {ad.id}</span>
+        <span className="truncate w-full text-center">Status: {errorDetails.status || "N/A"}</span>
+        <span className="truncate w-full text-center font-mono text-[6px]">Code: {errorDetails.errorType || "N/A"}</span>
+      </div>
+    );
+  }
+
+  return (
+    <img 
+      src={imgSrc || src}
+      alt={ad.altText} 
+      className="w-full h-full object-cover" 
+      referrerPolicy="no-referrer"
+      onError={() => {
+        setErrorDetails({
+          errorType: "IMG_ON_ERROR",
+          message: "Triggered onError on img tag",
+          src: src
+        });
+      }}
+    />
+  );
+};
 
 interface AdminPanelProps {
   onNavigate: (path: string) => void;
@@ -1147,18 +1253,7 @@ export default function AdminPanel({ onNavigate }: AdminPanelProps) {
                                 <div key={ad.id} className="bg-card-main border border-border-main p-3 rounded-xl flex items-center justify-between gap-3 hover:border-green-primary/30 transition-all">
                                   <div className="flex items-center gap-3 min-w-0">
                                     <div className="w-12 h-12 bg-card-inner rounded-lg border border-border-main overflow-hidden shrink-0 flex items-center justify-center">
-                                      <img 
-                                        src={ad.storagePath ? `/api/ads-public-image?path=${encodeURIComponent(ad.storagePath)}` : (ad.imageUrl.startsWith("data:") || ad.imageUrl.startsWith("/") ? ad.imageUrl : `/api/ads-public-image?url=${encodeURIComponent(ad.imageUrl)}`)}
-                                        alt={ad.altText} 
-                                        className="w-full h-full object-cover" 
-                                        onError={(e) => {
-                                          console.error("[ADS ERROR] Failed to load list image:", {
-                                            adId: ad.id,
-                                            url: ad.imageUrl,
-                                            position: pos.id
-                                          });
-                                        }}
-                                      />
+                                      <AdThumbnail ad={ad} posId={pos.id} />
                                     </div>
                                     <div className="min-w-0">
                                       <h5 className="text-xs font-extrabold text-text-main truncate">{ad.title}</h5>
@@ -2122,7 +2217,7 @@ export default function AdminPanel({ onNavigate }: AdminPanelProps) {
             <div className="bg-card-inner border border-border-main p-3 rounded-xl mt-4 flex items-center gap-3">
               <div className="w-10 h-10 bg-[#161D26] rounded-lg border border-border-main overflow-hidden shrink-0 flex items-center justify-center">
                 <img 
-                  src={confirmDeleteAd.storagePath ? `/api/ads-public-image?path=${encodeURIComponent(confirmDeleteAd.storagePath)}` : confirmDeleteAd.imageUrl} 
+                  src={resolveAdImageSrc(confirmDeleteAd)} 
                   alt={confirmDeleteAd.altText} 
                   className="w-full h-full object-cover" 
                 />

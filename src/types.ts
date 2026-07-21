@@ -70,3 +70,17 @@ export interface SeoConfig {
   siteTitle?: string;
   siteSubtitle?: string;
 }
+
+export function resolveAdImageSrc(ad: Partial<Ad> | Ad): string {
+  if (ad.storagePath) {
+    return `/api/ads-public-image?path=${encodeURIComponent(ad.storagePath)}`;
+  }
+  
+  const imageUrl = ad.imageUrl || "";
+  if (imageUrl.startsWith("data:") || imageUrl.startsWith("/")) {
+    return imageUrl;
+  }
+  
+  return `/api/ads-public-image?url=${encodeURIComponent(imageUrl)}`;
+}
+
