@@ -1,8 +1,45 @@
 node_modules/
-build/
 dist/
-coverage/
-.DS_Store
+build/
+target/
+.cache/
+.tmp/
+temp/
+logs/
 *.log
-.env*
-!.env.example
+.env
+.env.*
+! .env.example
+
+# Service account keys and secrets
+*-key.json
+*credentials*.json
+service-account*.json
+firebase-applet-config-*.json
+
+# Executables, installers and binary files
+*.exe
+*.msi
+*.dll
+*.dmg
+*.AppImage
+*.deb
+*.rpm
+*.bin
+
+# Desktop/Tauri remnants and builds
+src-tauri/target/
+somdrive-desktop/
+tauri.conf.json
+tauri.conf.json5
+Cargo.lock
+
+# IDE and OS cache files
+.vscode/
+.idea/
+.serverless/
+.next/
+.turbo/
+.vercel/
+.DS_Store
+

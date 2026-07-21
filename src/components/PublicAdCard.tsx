@@ -43,12 +43,52 @@ export default function PublicAdCard({ ad, position, onImageError }: PublicAdCar
     trackEvent("ad_click", { ad_id: ad.id, ad_position: position, destination_url: destinationUrl });
   };
 
-  const hasImage = !!(ad.storagePath || ad.imageUrl);
-  const imageSrc = ad.storagePath 
-    ? `/api/ads-public-image?path=${encodeURIComponent(ad.storagePath)}` 
-    : (ad.imageUrl && (ad.imageUrl.startsWith("data:") || ad.imageUrl.startsWith("blob:") || ad.imageUrl.startsWith("/")) 
-        ? ad.imageUrl 
-        : (ad.imageUrl ? `/api/ads-public-image?url=${encodeURIComponent(ad.imageUrl)}` : ""));
+  const hasImage = !!(ad.imageUrl || ad.storagePath);
+  
+  // Robust dual-strategy URL configuration:
+  // 1. Preferred (Proxy): ALWAYS prefer the local Express server proxy first if storagePath is available.
+  // This avoids mixed content issues, bypasses iframe sandboxes, CORS blocks, and external domain AdBlockers.
+  // 2. Alternative (Direct): Fallback to direct public R2 CDN url.
+  const preferredSrc = ad.storagePath
+    ? `/api/ads-public-image?path=${encodeURIComponent(ad.storagePath)}`
+    : (ad.imageUrl && (ad.imageUrl.startsWith("http://") || ad.imageUrl.startsWith("https://") || ad.imageUrl.startsWith("data:") || ad.imageUrl.startsWith("blob:") || ad.imageUrl.startsWith("/")))
+      ? ad.imageUrl
+      : ad.imageUrl 
+        ? `/api/ads-public-image?url=${encodeURIComponent(ad.imageUrl)}`
+        : "";
+
+  const alternativeSrc = ad.storagePath && ad.imageUrl && (ad.imageUrl.startsWith("http://") || ad.imageUrl.startsWith("https://"))
+    ? ad.imageUrl
+    : "";
+
+  const [currentSrc, setCurrentSrc] = React.useState(preferredSrc);
+  const [hasFailedOnce, setHasFailedOnce] = React.useState(false);
+
+  // Synchronize component state if ad changes (e.g. edited inline without full remount)
+  React.useEffect(() => {
+    const preferred = ad.storagePath
+      ? `/api/ads-public-image?path=${encodeURIComponent(ad.storagePath)}`
+      : (ad.imageUrl && (ad.imageUrl.startsWith("http://") || ad.imageUrl.startsWith("https://") || ad.imageUrl.startsWith("data:") || ad.imageUrl.startsWith("blob:") || ad.imageUrl.startsWith("/")))
+        ? ad.imageUrl
+        : ad.imageUrl 
+          ? `/api/ads-public-image?url=${encodeURIComponent(ad.imageUrl)}`
+          : "";
+    setCurrentSrc(preferred);
+    setHasFailedOnce(false);
+  }, [ad.imageUrl, ad.storagePath]);
+
+  const handleImageError = () => {
+    if (!hasFailedOnce && alternativeSrc && currentSrc !== alternativeSrc) {
+      console.warn(`[ADS] Primary image load failed for ad ${ad.id}. Swapping to alternative URL: ${alternativeSrc}`);
+      setCurrentSrc(alternativeSrc);
+      setHasFailedOnce(true);
+    } else {
+      if (ad.id !== "preview") {
+        console.error(`[ADS ERROR] Failed to load image for ad: ${ad.id}`, ad);
+        onImageError(ad.id);
+      }
+    }
+  };
 
   const isHorizontalArea = ["below_how_it_works", "below_pdf_tools", "page_bottom"].includes(position);
   const isWideFormat = format === "wide_banner" || format === "horizontal_banner" || format === "horizontal_rectangle" || isHorizontalArea;
@@ -64,7 +104,7 @@ export default function PublicAdCard({ ad, position, onImageError }: PublicAdCar
   // Shared Image Element with strict styling specifications (prevents stretching/distortion)
   const ImageElement = hasImage ? (
     <img
-      src={imageSrc}
+      src={currentSrc}
       alt={altText}
       loading="lazy"
       style={{
@@ -76,12 +116,7 @@ export default function PublicAdCard({ ad, position, onImageError }: PublicAdCar
       }}
       className={isWideBanner || format === "auto" ? "" : "transition-transform duration-300 group-hover:scale-[1.015]"}
       referrerPolicy="no-referrer"
-      onError={() => {
-        if (ad.id !== "preview") {
-          console.error(`[ADS ERROR] Failed to load image for ad: ${ad.id}`, ad);
-          onImageError(ad.id);
-        }
-      }}
+      onError={handleImageError}
     />
   ) : (
     <div className="w-full h-full flex flex-col items-center justify-center bg-card-inner border border-dashed border-border-main text-text-muted gap-2 p-4 min-h-[120px]">

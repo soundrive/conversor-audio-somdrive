@@ -460,6 +460,28 @@ async function startServer() {
       
       const cleanStoragePath = storagePath.trim().replace(/^\/+/, "").replace(/\s+/g, "_");
       
+      // Strict security validations to prevent directory traversal and bucket exposure
+      if (
+        cleanStoragePath.includes("..") ||
+        cleanStoragePath.includes("http://") ||
+        cleanStoragePath.includes("https://") ||
+        cleanStoragePath.includes("file://") ||
+        cleanStoragePath.startsWith("/")
+      ) {
+        return res.status(403).json({
+          error: "FORBIDDEN_PATH",
+          message: "Acesso negado: o caminho fornecido contém caracteres ou protocolos proibidos."
+        });
+      }
+
+      // Restrict access exclusively to approved directories ('ads/' and 'branding/')
+      if (!cleanStoragePath.startsWith("ads/") && !cleanStoragePath.startsWith("branding/")) {
+        return res.status(403).json({
+          error: "FORBIDDEN_DIRECTORY",
+          message: "Acesso negado: a rota pública de imagens só aceita recursos das pastas 'ads/' e 'branding/'."
+        });
+      }
+      
       const r2Config = getR2Client();
       const { s3, bucketName } = r2Config;
       
@@ -483,6 +505,10 @@ async function startServer() {
           res.setHeader("Content-Type", "image/jpeg");
         }
       }
+
+      if (response.ContentLength !== undefined) {
+        res.setHeader("Content-Length", response.ContentLength.toString());
+      }
       
       res.setHeader("Cache-Control", "public, max-age=31536000");
       
@@ -493,11 +519,23 @@ async function startServer() {
         const bytes = await stream.transformToByteArray();
         res.send(Buffer.from(bytes));
       } else {
-        res.status(404).send("Image body is empty");
+        res.status(404).json({
+          error: "EMPTY_BODY",
+          message: "O arquivo foi localizado, mas o corpo está vazio."
+        });
       }
     } catch (err: any) {
       console.error("[SERVER] Error proxying public image:", err);
-      res.status(500).send("Error loading image");
+      if (err.name === "NoSuchKey" || err.$metadata?.httpStatusCode === 404) {
+        return res.status(404).json({
+          error: "NOT_FOUND",
+          message: "A imagem especificada não existe no servidor de armazenamento."
+        });
+      }
+      res.status(500).json({
+        error: "INTERNAL_ERROR",
+        message: "Erro interno ao carregar o arquivo de imagem."
+      });
     }
   });
 

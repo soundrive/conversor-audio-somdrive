@@ -24,7 +24,6 @@
     "noEmit": true
   },
   "exclude": [
-    "somdrive-desktop",
     "node_modules",
     "dist"
   ]

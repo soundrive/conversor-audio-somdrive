@@ -126,9 +126,10 @@ export default function App() {
           .filter(docSnap => docSnap.id !== "seo_config")
           .map(docSnap => {
             const data = docSnap.data();
-            const isCurrentlyActive = data.active !== undefined 
-              ? data.active 
-              : (data.isActive !== undefined ? data.isActive : true);
+            const rawActive = data.active !== undefined ? data.active : data.isActive;
+            const isCurrentlyActive = rawActive !== undefined 
+              ? (typeof rawActive === "string" ? rawActive === "true" : !!rawActive)
+              : true;
               
             return {
               id: docSnap.id,
