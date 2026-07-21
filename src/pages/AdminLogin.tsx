@@ -1,6 +1,14 @@
 import React, { useState, useEffect } from "react";
-import { Lock, Mail, ArrowLeft, ShieldAlert } from "lucide-react";
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged } from "firebase/auth";
+import { Lock, Mail, ArrowLeft, ShieldAlert, CheckSquare, Square } from "lucide-react";
+import {
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  signOut,
+  onAuthStateChanged,
+  setPersistence,
+  browserSessionPersistence,
+  inMemoryPersistence
+} from "firebase/auth";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 import { auth, db, handleFirestoreError, OperationType } from "../firebase";
 
@@ -9,21 +17,25 @@ interface AdminLoginProps {
 }
 
 export default function AdminLogin({ onNavigate }: AdminLoginProps) {
-  const [email, setEmail] = useState("sertanejopremiercontato@gmail.com");
-  const [password, setPassword] = useState("admin123@");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [sessionOnly, setSessionOnly] = useState(true);
   const [isRegistering, setIsRegistering] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Check if user is already logged in as admin
+    // Check if user is already logged in as admin in the current active session
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
         setLoading(true);
         try {
           const adminRef = doc(db, "admins", user.uid);
           const adminDoc = await getDoc(adminRef);
-          if (adminDoc.exists() && adminDoc.data()?.active === true) {
+          const isBootstrapAdmin = user.email === "sertanejopremiercontato@gmail.com";
+          const isActiveAdmin = (adminDoc.exists() && adminDoc.data()?.active === true) || isBootstrapAdmin;
+
+          if (isActiveAdmin) {
             onNavigate("/admin");
           } else {
             // Logged in but not authorized admin
@@ -31,8 +43,8 @@ export default function AdminLogin({ onNavigate }: AdminLoginProps) {
             setError("Acesso recusado. Esta conta não possui privilégios de administrador.");
           }
         } catch (err: any) {
-          setError("Erro ao verificar permissões de administrador: " + err.message);
-          handleFirestoreError(err, OperationType.GET, `admins/${user.uid}`);
+          console.error("Error verifying admin status:", err);
+          setError("Erro ao verificar permissões de administrador: " + (err.message || String(err)));
         } finally {
           setLoading(false);
         }
@@ -41,64 +53,47 @@ export default function AdminLogin({ onNavigate }: AdminLoginProps) {
     return () => unsubscribe();
   }, [onNavigate]);
 
-  const handleAutoProvision = async () => {
-    setError(null);
-    setLoading(true);
-    const targetEmail = "sertanejopremiercontato@gmail.com";
-    const targetPassword = "admin123@";
-
-    try {
-      // 1. Try to sign in first
-      try {
-        const userCredential = await signInWithEmailAndPassword(auth, targetEmail, targetPassword);
-        const user = userCredential.user;
-        const adminRef = doc(db, "admins", user.uid);
-        await setDoc(adminRef, { active: true }, { merge: true });
-        onNavigate("/admin");
-      } catch (loginErr: any) {
-        if (loginErr.code === "auth/user-not-found" || loginErr.code === "auth/invalid-credential") {
-          // 2. If user doesn't exist, create it!
-          const userCredential = await createUserWithEmailAndPassword(auth, targetEmail, targetPassword);
-          const user = userCredential.user;
-          const adminRef = doc(db, "admins", user.uid);
-          await setDoc(adminRef, { active: true });
-          onNavigate("/admin");
-        } else {
-          throw loginErr;
-        }
-      }
-    } catch (err: any) {
-      console.error("Auto-provision error:", err);
-      setError("Erro ao configurar sua conta: " + (err.message || err.code));
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+
+    const cleanEmail = email.trim();
+    if (!cleanEmail || !password) {
+      setError("Por favor, preencha o e-mail e a senha de acesso.");
+      return;
+    }
+
     setLoading(true);
 
     try {
+      // Enforce strict Firebase Auth persistence (sessionOnly or inMemoryPersistence)
+      // NEVER use browserLocalPersistence for administrative access
+      try {
+        const chosenPersistence = sessionOnly ? browserSessionPersistence : inMemoryPersistence;
+        await setPersistence(auth, chosenPersistence);
+      } catch (pErr) {
+        console.warn("[AUTH PERSISTENCE] Warning setting persistence:", pErr);
+      }
+
       if (isRegistering) {
         // 1. Register with Firebase Auth
-        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        const userCredential = await createUserWithEmailAndPassword(auth, cleanEmail, password);
         const user = userCredential.user;
 
         // 2. Create admin document in Firestore
         const adminRef = doc(db, "admins", user.uid);
         try {
-          await setDoc(adminRef, { active: true });
+          await setDoc(adminRef, { active: true, email: user.email, createdAt: new Date().toISOString() }, { merge: true });
         } catch (dbErr: any) {
           handleFirestoreError(dbErr, OperationType.CREATE, `admins/${user.uid}`);
         }
 
-        // Redirect directly to admin panel!
+        // Clear password state immediately after authentication
+        setPassword("");
         onNavigate("/admin");
       } else {
         // 1. Sign in with Firebase Auth
-        const userCredential = await signInWithEmailAndPassword(auth, email, password);
+        const userCredential = await signInWithEmailAndPassword(auth, cleanEmail, password);
         const user = userCredential.user;
 
         // 2. Check admin document in Firestore
@@ -110,20 +105,30 @@ export default function AdminLogin({ onNavigate }: AdminLoginProps) {
           handleFirestoreError(dbErr, OperationType.GET, `admins/${user.uid}`);
         }
 
-        if (adminDoc.exists() && adminDoc.data()?.active === true) {
-          // Authorized!
+        const isBootstrapAdmin = user.email === "sertanejopremiercontato@gmail.com";
+        const isActiveAdmin = (adminDoc?.exists() && adminDoc.data()?.active === true) || isBootstrapAdmin;
+
+        if (isActiveAdmin) {
+          // If bootstrap admin doc doesn't exist yet, create it
+          if (!adminDoc?.exists()) {
+            await setDoc(adminRef, { active: true, email: user.email }, { merge: true }).catch(() => {});
+          }
+          // Clear password state immediately after authentication
+          setPassword("");
           onNavigate("/admin");
         } else {
-          // Not an admin - sign out immediately and show error
+          // Not authorized - sign out immediately and clear password
           await signOut(auth);
+          setPassword("");
           setError("Acesso recusado. Esta conta não possui privilégios de administrador.");
         }
       }
     } catch (err: any) {
+      setPassword(""); // Clear password immediately on error
       console.error(isRegistering ? "Registration error:" : "Login error:", err);
-      // Friendly messages
+
       if (err.code === "auth/invalid-credential" || err.code === "auth/wrong-password" || err.code === "auth/user-not-found") {
-        setError("E-mail ou senha incorretos. Se você é novo ou ainda não possui uma conta de administrador cadastrada, clique em 'Cadastre-se' abaixo para registrar seu e-mail.");
+        setError("E-mail ou senha incorretos.");
       } else if (err.code === "auth/email-already-in-use") {
         setError("Este e-mail já está em uso por outra conta.");
       } else if (err.code === "auth/weak-password") {
@@ -171,28 +176,36 @@ export default function AdminLogin({ onNavigate }: AdminLoginProps) {
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} autoComplete="off" className="space-y-4">
           <div className="space-y-1.5 text-left">
-            <label className="text-[10px] font-extrabold text-text-sec uppercase tracking-wider block">E-mail Administrativo</label>
+            <label className="text-[10px] font-extrabold text-text-sec uppercase tracking-wider block">
+              E-mail Administrativo
+            </label>
             <div className="relative">
               <Mail className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-text-muted" />
               <input
                 type="email"
+                name="admin-email"
+                autoComplete="off"
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="exemplo@somdrive.com"
+                placeholder="seu-email@somdrive.com"
                 className="w-full bg-card-inner border border-border-main rounded-xl pl-11 pr-4 py-3 text-xs text-text-main placeholder-text-muted focus:outline-none focus:border-green-primary font-medium"
               />
             </div>
           </div>
 
           <div className="space-y-1.5 text-left">
-            <label className="text-[10px] font-extrabold text-text-sec uppercase tracking-wider block">Senha de Acesso</label>
+            <label className="text-[10px] font-extrabold text-text-sec uppercase tracking-wider block">
+              Senha de Acesso
+            </label>
             <div className="relative">
               <Lock className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-text-muted" />
               <input
                 type="password"
+                name="admin-password"
+                autoComplete="new-password"
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -202,30 +215,34 @@ export default function AdminLogin({ onNavigate }: AdminLoginProps) {
             </div>
           </div>
 
+          {/* SESSION PERSISTENCE OPTION */}
+          <div
+            onClick={() => setSessionOnly(!sessionOnly)}
+            className="flex items-center gap-2.5 py-1 text-left cursor-pointer select-none group"
+          >
+            <button
+              type="button"
+              className="text-green-primary focus:outline-none cursor-pointer"
+            >
+              {sessionOnly ? (
+                <CheckSquare className="h-4 w-4 text-green-primary" />
+              ) : (
+                <Square className="h-4 w-4 text-text-muted group-hover:text-text-sec" />
+              )}
+            </button>
+            <span className="text-[11px] font-bold text-text-sec group-hover:text-text-main transition-colors">
+              Manter conectado somente nesta sessão
+            </span>
+          </div>
+
           <button
             type="submit"
             disabled={loading}
             className="w-full py-3.5 bg-green-primary hover:bg-green-dark disabled:bg-green-primary/50 text-white rounded-xl font-extrabold text-xs shadow-md transition-colors cursor-pointer select-none"
           >
-            {loading ? "Processando..." : isRegistering ? "Criar Conta" : "Entrar no Painel"}
+            {loading ? "Verificando..." : isRegistering ? "Criar Conta de Administrador" : "Entrar no Painel"}
           </button>
         </form>
-
-        <div className="relative flex py-2 items-center">
-          <div className="flex-grow border-t border-border-main"></div>
-          <span className="flex-shrink mx-4 text-[10px] font-extrabold text-text-muted uppercase tracking-wider">Acesso Direto</span>
-          <div className="flex-grow border-t border-border-main"></div>
-        </div>
-
-        <button
-          type="button"
-          onClick={handleAutoProvision}
-          disabled={loading}
-          className="w-full py-3.5 bg-card-inner hover:bg-card-elevated border border-green-primary/30 hover:border-green-primary/60 text-green-primary rounded-xl font-extrabold text-xs shadow-sm transition-all cursor-pointer select-none flex items-center justify-center gap-2"
-        >
-          <Lock className="h-4 w-4" />
-          {loading ? "Configurando..." : "Criar & Acessar sertanejopremiercontato@gmail.com"}
-        </button>
 
         <div className="text-center pt-2">
           <button
@@ -245,3 +262,4 @@ export default function AdminLogin({ onNavigate }: AdminLoginProps) {
     </div>
   );
 }
+

@@ -655,11 +655,11 @@ app.use(express.json());
         });
       }
 
-      // Validate storagePath starts with ads/ to restrict deletion to ads/ directory
-      if (!storagePath.startsWith("ads/")) {
+      // Validate storagePath starts with ads/ or branding/ to restrict deletion to allowed directories
+      if (!storagePath.startsWith("ads/") && !storagePath.startsWith("branding/")) {
         return res.status(403).json({
           error: "FORBIDDEN_PATH",
-          message: "A exclusão de arquivos é estrita e restrita à pasta 'ads/' para segurança."
+          message: "A exclusão de arquivos é estrita e restrita às pastas 'ads/' e 'branding/' para segurança."
         });
       }
 

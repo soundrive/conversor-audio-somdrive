@@ -26,6 +26,7 @@ import { onAuthStateChanged, signOut } from "firebase/auth";
 import { collection, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, query, orderBy, serverTimestamp, onSnapshot } from "firebase/firestore";
 import { auth, db, handleFirestoreError, OperationType } from "../firebase";
 import { Ad, SeoConfig, resolveAdImageSrc } from "../types";
+import { DEFAULT_SEO_CONFIG } from "../lib/useSeoHead";
 import PublicAdCard from "../components/PublicAdCard";
 import AdminSeoManager from "../components/AdminSeoManager";
 import AdminBrandingManager from "../components/AdminBrandingManager";
@@ -146,7 +147,7 @@ export default function AdminPanel({ onNavigate }: AdminPanelProps) {
   const [currentUser, setCurrentUser] = useState<any>(null);
 
   // General App states
-  const [activeTab, setActiveTab] = useState<"ads" | "seo" | "analytics">("ads");
+  const [activeTab, setActiveTab] = useState<"ads" | "seo" | "analytics" | "branding">("ads");
   const [ads, setAds] = useState<Ad[]>([]);
 
   // GA4 Analytics States
@@ -185,29 +186,7 @@ export default function AdminPanel({ onNavigate }: AdminPanelProps) {
     }
   }, [activeTab, currentUser]);
 
-  const [seo, setSeo] = useState<SeoConfig>({
-    siteName: "Conversor SunDrive",
-    title: "Conversor de Áudio e Ferramentas PDF Grátis | Conversor SunDrive",
-    description: "Converta arquivos de áudio para MP3, WAV e outros formatos e utilize ferramentas para comprimir, juntar e organizar PDFs. Sem login e sem salvar seus arquivos.",
-    canonical: "https://somdrive.com",
-    robots: "index, follow",
-    ogTitle: "Conversor de Áudio e Ferramentas PDF Grátis | Conversor SunDrive",
-    ogDescription: "Converta arquivos de áudio para MP3, WAV e outros formatos e utilize ferramentas para comprimir, juntar e organizar PDFs. Sem login e sem salvar seus arquivos.",
-    ogImage: "https://somdrive.com/og-image.jpg",
-    twitterCard: "summary_large_image",
-    siteLogoUrl: "",
-    siteTitle: "Conversor SunDrive",
-    siteSubtitle: "Ferramentas para áudio e PDF.",
-    pages: {
-      home: { title: "Conversor de Áudio e Ferramentas PDF Grátis | Conversor SunDrive", description: "Converta arquivos de áudio para MP3, WAV e outros formatos e utilize ferramentas para comprimir, juntar e organizar PDFs. Sem login e sem salvar seus arquivos." },
-      audio: { title: "Conversor de Áudio Grátis para MP3, WAV e Mais | SunDrive", description: "Converta seus arquivos de áudio online 100% no seu navegador de forma gratuita e segura. Suporta MP3, WAV, AAC, FLAC e OGG." },
-      pdf: { title: "Comprimir, Juntar e Organizar PDF Grátis | SunDrive", description: "Ferramentas PDF grátis e seguras de nível profissional. Junte, comprima, reordene e exclua páginas de arquivos PDF 100% no seu navegador." },
-      merge: { title: "Juntar PDF Grátis Online | SunDrive", description: "Combine múltiplos arquivos PDF em uma única sequência organizada sem perda de qualidade e com segurança total." },
-      compress: { title: "Comprimir PDF Grátis sem Perda de Qualidade | SunDrive", description: "Reduza o tamanho do seu PDF online de forma rápida e segura sem comprometer a leitura dos textos." },
-      imgToPdf: { title: "Converter Imagens JPG, PNG para PDF Grátis | SunDrive", description: "Transforme fotos e imagens em documentos PDF profissionais com formatação A4 e margens ajustáveis." },
-      organize: { title: "Organizar e Reordenar Páginas PDF Grátis | SunDrive", description: "Mude a ordem das páginas do seu PDF de forma visual e simples através de arrastar e soltar." }
-    }
-  });
+  const [seo, setSeo] = useState<SeoConfig>(DEFAULT_SEO_CONFIG);
 
   // Form states for adding/editing Ads
   const [isAdFormOpen, setIsAdFormOpen] = useState<boolean>(false);
@@ -473,30 +452,23 @@ export default function AdminPanel({ onNavigate }: AdminPanelProps) {
 
       try {
         const adminSnapshot = await getDoc(adminRef);
-        console.log('[ADMIN AUTH] Documento existe: ' + adminSnapshot.exists());
+        const isBootstrapAdmin = user.email === "sertanejopremiercontato@gmail.com";
+        const adminData = adminSnapshot.exists() ? adminSnapshot.data() : null;
+        const isActive = (adminData?.active === true) || isBootstrapAdmin;
 
-        if (!adminSnapshot.exists()) {
-          console.log('[ADMIN AUTH] Acesso negado');
+        if (!isActive) {
+          console.log('[ADMIN AUTH] Acesso negado - Não é administrador ativo');
           if (mounted) {
             clearTimeout(timeoutId);
             setAuthStatus('forbidden');
             setLoading(false);
           }
+          await signOut(auth).catch(() => {});
           return;
         }
 
-        const adminData = adminSnapshot.data();
-        const isActive = adminData?.active === true;
-        console.log('[ADMIN AUTH] active: ' + isActive);
-
-        if (!isActive) {
-          console.log('[ADMIN AUTH] Acesso negado');
-          if (mounted) {
-            clearTimeout(timeoutId);
-            setAuthStatus('forbidden');
-            setLoading(false);
-          }
-          return;
+        if (!adminSnapshot.exists() && isBootstrapAdmin) {
+          await setDoc(adminRef, { active: true, email: user.email }, { merge: true }).catch(() => {});
         }
 
         console.log('[ADMIN AUTH] Acesso liberado');
@@ -528,6 +500,13 @@ export default function AdminPanel({ onNavigate }: AdminPanelProps) {
       unsubscribe();
     };
   }, [onNavigate, retryTrigger]);
+
+  // Redirect to login if unauthenticated
+  useEffect(() => {
+    if (authStatus === 'unauthenticated') {
+      onNavigate("/admin-login");
+    }
+  }, [authStatus, onNavigate]);
 
   // Load ads from Firestore
   const loadAds = async () => {
@@ -665,9 +644,13 @@ export default function AdminPanel({ onNavigate }: AdminPanelProps) {
   const handleLogout = async () => {
     try {
       await signOut(auth);
-      onNavigate("/");
     } catch (err) {
       console.error("Logout failed:", err);
+    } finally {
+      setCurrentUser(null);
+      setAds([]);
+      setAuthStatus('unauthenticated');
+      onNavigate("/admin-login");
     }
   };
 

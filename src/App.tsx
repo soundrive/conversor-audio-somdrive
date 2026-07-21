@@ -35,7 +35,7 @@ import { collection, getDocs, query, where, doc, getDoc, onSnapshot } from "fire
 import { db, handleFirestoreError, OperationType } from "./firebase";
 import { initGA, trackPageView, trackEvent, updateGAConsent } from "./lib/gtag";
 import PublicAdCard from "./components/PublicAdCard";
-import useSeoHead from "./lib/useSeoHead";
+import useSeoHead, { DEFAULT_SEO_CONFIG } from "./lib/useSeoHead";
 
 
 type TabType = "inicio" | "audio" | "pdf";
@@ -59,29 +59,7 @@ export default function App() {
   const mainContentRef = useRef<HTMLDivElement>(null);
 
   // SEO Config state
-  const [seoConfig, setSeoConfig] = useState<SeoConfig>({
-    siteName: "Conversor SunDrive",
-    title: "Conversor de Áudio e Ferramentas PDF Grátis | Conversor SunDrive",
-    description: "Converta arquivos de áudio para MP3, WAV e outros formatos e utilize ferramentas para comprimir, juntar e organizar PDFs. Sem login e sem salvar seus arquivos.",
-    canonical: "https://somdrive.com",
-    robots: "index, follow",
-    ogTitle: "Conversor de Áudio e Ferramentas PDF Grátis | Conversor SunDrive",
-    ogDescription: "Converta arquivos de áudio para MP3, WAV e outros formatos e utilize ferramentas para comprimir, juntar e organizar PDFs. Sem login e sem salvar seus arquivos.",
-    ogImage: "https://somdrive.com/og-image.jpg",
-    twitterCard: "summary_large_image",
-    siteLogoUrl: "",
-    siteTitle: "Conversor SunDrive",
-    siteSubtitle: "Ferramentas para áudio e PDF.",
-    pages: {
-      home: { title: "Conversor de Áudio e Ferramentas PDF Grátis | Conversor SunDrive", description: "Converta arquivos de áudio para MP3, WAV e outros formatos e utilize ferramentas para comprimir, juntar e organizar PDFs. Sem login e sem salvar seus arquivos." },
-      audio: { title: "Conversor de Áudio Grátis para MP3, WAV e Mais | SunDrive", description: "Converta seus arquivos de áudio online 100% no seu navegador de forma gratuita e segura. Suporta MP3, WAV, AAC, FLAC e OGG." },
-      pdf: { title: "Comprimir, Juntar e Organizar PDF Grátis | SunDrive", description: "Ferramentas PDF grátis e seguras de nível profissional. Junte, comprima, reordene e exclua páginas de arquivos PDF 100% no seu navegador." },
-      merge: { title: "Juntar PDF Grátis Online | SunDrive", description: "Combine múltiplos arquivos PDF em uma única sequência organizada sem perda de qualidade e com segurança total." },
-      compress: { title: "Comprimir PDF Grátis sem Perda de Qualidade | SunDrive", description: "Reduza o tamanho do seu PDF online de forma rápida e segura sem comprometer a leitura dos textos." },
-      imgToPdf: { title: "Converter Imagens JPG, PNG para PDF Grátis | SunDrive", description: "Transforme fotos e imagens em documentos PDF profissionais com formatação A4 e margens ajustáveis." },
-      organize: { title: "Organizar e Reordenar Páginas PDF Grátis | SunDrive", description: "Mude a ordem das páginas do seu PDF de forma visual e simples através de arrastar e soltar." }
-    }
-  });
+  const [seoConfig, setSeoConfig] = useState<SeoConfig>(DEFAULT_SEO_CONFIG);
 
   // Ads state
   const [ads, setAds] = useState<Ad[]>([]);
@@ -512,11 +490,11 @@ export default function App() {
     }
   };
 
-  if (currentPath === "/admin-login") {
+  if (currentPath === "/admin-login" || currentPath.startsWith("/admin-login")) {
     return <AdminLogin onNavigate={navigateTo} />;
   }
 
-  if (currentPath === "/admin") {
+  if (currentPath === "/admin" || currentPath.startsWith("/admin/")) {
     return <AdminPanel onNavigate={navigateTo} />;
   }
 
