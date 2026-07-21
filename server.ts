@@ -2,14 +2,12 @@ import express from "express";
 import path from "path";
 import fs from "fs";
 import dotenv from "dotenv";
+import crypto from "crypto";
 import { initializeApp } from "firebase/app";
 import { getFirestore, doc, getDoc } from "firebase/firestore";
 import { S3Client, PutObjectCommand, DeleteObjectCommand, GetObjectCommand, HeadObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
-import admin from "firebase-admin";
-import { getFirestore as getAdminFirestore } from "firebase-admin/firestore";
-import { getAuth as getAdminAuth } from "firebase-admin/auth";
-import { BetaAnalyticsDataClient } from "@google-analytics/data";
+import firebaseConfig from "./firebase-applet-config.json";
 
 // Load environment variables
 dotenv.config();
@@ -46,41 +44,117 @@ function repairPrivateKey(rawKey: string): string {
   return rawKey.replace(/\\n/g, "\n");
 }
 
-let analyticsClient: BetaAnalyticsDataClient | null = null;
+// Generate Google access token using pure Node.js crypto (no external dependencies, no gRPC)
+function generateGoogleAccessToken(clientEmail: string, privateKey: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    try {
+      const header = {
+        alg: "RS256",
+        typ: "JWT"
+      };
+      
+      const now = Math.floor(Date.now() / 1000);
+      const payload = {
+        iss: clientEmail,
+        scope: "https://www.googleapis.com/auth/analytics.readonly",
+        aud: "https://oauth2.googleapis.com/token",
+        exp: now + 3600,
+        iat: now
+      };
 
-function getAnalyticsClient(): BetaAnalyticsDataClient {
-  if (!analyticsClient) {
-    const clientEmail = process.env.GA4_CLIENT_EMAIL?.trim();
-    const rawKey = process.env.GA4_PRIVATE_KEY || "";
-    const repairedKey = repairPrivateKey(rawKey);
-
-    if (!clientEmail || !repairedKey) {
-      throw new Error("Credenciais do Google Analytics (GA4_CLIENT_EMAIL ou GA4_PRIVATE_KEY) ausentes ou inválidas.");
+      const base64Header = Buffer.from(JSON.stringify(header)).toString("base64url");
+      const base64Payload = Buffer.from(JSON.stringify(payload)).toString("base64url");
+      
+      const sign = crypto.createSign("RSA-SHA256");
+      sign.update(`${base64Header}.${base64Payload}`);
+      const signature = sign.sign(privateKey, "base64url");
+      
+      const jwt = `${base64Header}.${base64Payload}.${signature}`;
+      
+      fetch("https://oauth2.googleapis.com/token", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded"
+        },
+        body: new URLSearchParams({
+          grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
+          assertion: jwt
+        })
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (data.access_token) {
+          resolve(data.access_token);
+        } else {
+          reject(new Error(data.error_description || data.error || "Failed to obtain access token"));
+        }
+      })
+      .catch(reject);
+    } catch (err) {
+      reject(err);
     }
-
-    analyticsClient = new BetaAnalyticsDataClient({
-      credentials: {
-        client_email: clientEmail,
-        private_key: repairedKey,
-      }
-    });
-  }
-  return analyticsClient;
+  });
 }
 
-// Load Firebase configuration
-let firebaseConfig: any = null;
-try {
-  const configPath = path.join(process.cwd(), "firebase-applet-config.json");
-  const configContent = fs.readFileSync(configPath, "utf-8");
-  firebaseConfig = JSON.parse(configContent);
-} catch (err) {
-  try {
-    const configContent = fs.readFileSync("./firebase-applet-config.json", "utf-8");
-    firebaseConfig = JSON.parse(configContent);
-  } catch (err2) {
-    console.error("[SERVER] Failed to read firebase-applet-config.json:", err2);
+// Lightweight Google Analytics 4 report client using standard Google REST API (completely bypasses gRPC)
+async function runGA4ReportREST(propertyId: string, payload: any): Promise<any> {
+  const clientEmail = process.env.GA4_CLIENT_EMAIL?.trim();
+  const rawKey = process.env.GA4_PRIVATE_KEY || "";
+  const repairedKey = repairPrivateKey(rawKey);
+
+  if (!clientEmail || !repairedKey) {
+    throw new Error("Credenciais do Google Analytics (GA4_CLIENT_EMAIL ou GA4_PRIVATE_KEY) ausentes ou inválidas.");
   }
+
+  // 1. Generate Google Access Token via standard JWT bearer flow
+  const accessToken = await generateGoogleAccessToken(clientEmail, repairedKey);
+
+  // 2. Make the HTTP request to the Analytics Data API
+  const url = `https://analyticsdata.googleapis.com/v1beta/properties/${propertyId}:runReport`;
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${accessToken}`
+    },
+    body: JSON.stringify(payload)
+  });
+
+  if (!response.ok) {
+    const errorBody = await response.text();
+    throw new Error(`Google Analytics API respondeu com status ${response.status}: ${errorBody}`);
+  }
+
+  return response.json();
+}
+
+// Lightweight, 100% secure Firebase ID Token verification using standard Google REST API (completely bypasses gRPC & firebase-admin)
+async function verifyFirebaseIdToken(token: string): Promise<{ uid: string }> {
+  const apiKey = firebaseConfig?.apiKey;
+  if (!apiKey) {
+    throw new Error("API Key do Firebase ausente para verificação de token.");
+  }
+  
+  const url = `https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${apiKey}`;
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ idToken: token })
+  });
+  
+  if (!response.ok) {
+    const errData = await response.json().catch(() => ({}));
+    const errMsg = errData.error?.message || "Token inválido ou expirado";
+    throw new Error(errMsg);
+  }
+  
+  const data = await response.json();
+  const user = data.users?.[0];
+  if (!user || !user.localId) {
+    throw new Error("Usuário não encontrado ou token inválido");
+  }
+  
+  return { uid: user.localId };
 }
 
 // Initialize Firebase Client
@@ -95,23 +169,6 @@ if (firebaseConfig) {
   }
 }
 
-// Initialize Firebase Admin
-let adminDb: any = null;
-if (firebaseConfig) {
-  try {
-    const adminApp = admin.initializeApp({
-      projectId: firebaseConfig.projectId
-    });
-    const dbId = firebaseConfig.firestoreDatabaseId && firebaseConfig.firestoreDatabaseId !== "(default)"
-      ? firebaseConfig.firestoreDatabaseId
-      : undefined;
-    adminDb = getAdminFirestore(adminApp, dbId);
-    console.log("[SERVER] Firebase Admin SDK initialized successfully with database:", dbId || "(default)");
-  } catch (err) {
-    console.error("[SERVER] Failed to initialize Firebase Admin SDK:", err);
-  }
-}
-
 // Helper function to check if a user is an active admin (securely)
 async function checkIsAdminSecure(uid: string, token: string): Promise<boolean> {
   if (!uid || !token) {
@@ -119,33 +176,7 @@ async function checkIsAdminSecure(uid: string, token: string): Promise<boolean> 
     return false;
   }
 
-  // 1. Try Firebase Admin SDK first (which bypasses security rules entirely if IAM is correct)
-  if (adminDb) {
-    try {
-      const docSnap = await adminDb.collection("admins").doc(uid).get();
-      if (docSnap.exists) {
-        const data = docSnap.data();
-        console.log(`[SERVER-ADMIN] Admin check for ${uid}: exists=true, active=${data?.active}`);
-        return data?.active === true;
-      } else {
-        console.log(`[SERVER-ADMIN] Admin check for ${uid}: exists=false`);
-      }
-    } catch (err: any) {
-      const errMsg = String(err.message || err || "");
-      if (
-        errMsg.toLowerCase().includes("permission") ||
-        errMsg.toLowerCase().includes("denied") ||
-        errMsg.toLowerCase().includes("insufficient") ||
-        errMsg.toLowerCase().includes("unauthorized")
-      ) {
-        console.log(`[SERVER-ADMIN] Admin SDK Firestore check bypassed. Using secure REST fallback.`);
-      } else {
-        console.log(`[SERVER-ADMIN] Admin SDK Firestore check error:`, errMsg);
-      }
-    }
-  }
-
-  // 2. Secure fallback to Firestore REST API using the validated user's ID Token.
+  // Secure Firestore REST API using the validated user's ID Token.
   // This executes on behalf of the authenticated user, which is authorized by firestore.rules
   // to read their own /admins/{uid} document.
   if (firebaseConfig) {
@@ -214,10 +245,10 @@ async function requireAdminMiddleware(req: express.Request, res: express.Respons
       });
     }
 
-    // Verify token using Firebase Admin
+    // Verify token using lightweight secure REST helper
     let decodedToken;
     try {
-      decodedToken = await getAdminAuth().verifyIdToken(token);
+      decodedToken = await verifyFirebaseIdToken(token);
     } catch (tokenErr: any) {
       console.error("[SERVER-AUTH] Token verification failed:", tokenErr);
       return res.status(401).json({
@@ -369,7 +400,7 @@ app.use(express.json());
       // Verify token
       let decodedToken;
       try {
-        decodedToken = await getAdminAuth().verifyIdToken(token);
+        decodedToken = await verifyFirebaseIdToken(token);
       } catch (tokenErr: any) {
         console.error("[SERVER] Proxy upload token verification failed:", tokenErr);
         return res.status(401).json({
@@ -418,6 +449,39 @@ app.use(express.json());
         message: err.message || String(err)
       });
     }
+  });
+
+  // API Route: Diagnostics health check endpoint
+  app.get("/api/health", (req, res) => {
+    const r2Configured = !!(
+      process.env.R2_ADS_ACCOUNT_ID &&
+      process.env.R2_ADS_ACCESS_KEY_ID &&
+      process.env.R2_ADS_SECRET_ACCESS_KEY &&
+      process.env.R2_ADS_BUCKET_NAME &&
+      process.env.R2_ADS_PUBLIC_BASE_URL
+    );
+
+    const ga4Configured = !!(
+      process.env.GA4_PROPERTY_ID &&
+      process.env.GA4_CLIENT_EMAIL &&
+      process.env.GA4_PRIVATE_KEY
+    );
+
+    const firebaseConfigured = !!(
+      firebaseConfig &&
+      firebaseConfig.projectId &&
+      firebaseConfig.apiKey
+    );
+
+    return res.json({
+      ok: true,
+      runtime: "vercel",
+      services: {
+        r2Configured,
+        ga4Configured,
+        firebaseConfigured
+      }
+    });
   });
 
   // API Route: Public image proxy to avoid CORS and sandbox restrictions
@@ -676,21 +740,10 @@ app.use(express.json());
         });
       }
 
-      let client;
-      try {
-        client = getAnalyticsClient();
-      } catch (clientErr: any) {
-        return res.status(500).json({
-          error: "GA4_CLIENT_INIT_FAILED",
-          message: clientErr.message || "Falha ao inicializar o cliente do Google Analytics."
-        });
-      }
-
       // Query 1: Summary Statistics (Page Views, Active Users, Sessions)
       let summary = { pageViews: 0, activeUsers: 0, sessions: 0 };
       try {
-        const [summaryResponse] = await client.runReport({
-          property: `properties/${propertyId}`,
+        const summaryResponse = await runGA4ReportREST(propertyId, {
           dateRanges: [{ startDate: "7daysAgo", endDate: "today" }],
           metrics: [
             { name: "screenPageViews" },
@@ -722,8 +775,7 @@ app.use(express.json());
       // Query 2: Most Visited Pages
       let pages: any[] = [];
       try {
-        const [pagesResponse] = await client.runReport({
-          property: `properties/${propertyId}`,
+        const pagesResponse = await runGA4ReportREST(propertyId, {
           dateRanges: [{ startDate: "7daysAgo", endDate: "today" }],
           dimensions: [
             { name: "pagePath" },
@@ -757,8 +809,7 @@ app.use(express.json());
       };
 
       try {
-        const [eventsResponse] = await client.runReport({
-          property: `properties/${propertyId}`,
+        const eventsResponse = await runGA4ReportREST(propertyId, {
           dateRanges: [{ startDate: "7daysAgo", endDate: "today" }],
           dimensions: [{ name: "eventName" }],
           metrics: [{ name: "eventCount" }]
@@ -777,8 +828,7 @@ app.use(express.json());
 
       // Optional: breakdown of PDF tools if the custom dimension customEvent:tool exists
       try {
-        const [toolCountsResponse] = await client.runReport({
-          property: `properties/${propertyId}`,
+        const toolCountsResponse = await runGA4ReportREST(propertyId, {
           dateRanges: [{ startDate: "7daysAgo", endDate: "today" }],
           dimensions: [{ name: "eventName" }, { name: "customEvent:tool" }],
           metrics: [{ name: "eventCount" }]
@@ -799,8 +849,7 @@ app.use(express.json());
       // Query 4: Ads Performance
       const adsMap: Record<string, { adId: string, views: number, clicks: number }> = {};
       try {
-        const [adsResponse] = await client.runReport({
-          property: `properties/${propertyId}`,
+        const adsResponse = await runGA4ReportREST(propertyId, {
           dateRanges: [{ startDate: "7daysAgo", endDate: "today" }],
           dimensions: [{ name: "eventName" }, { name: "customEvent:ad_id" }],
           metrics: [{ name: "eventCount" }]
