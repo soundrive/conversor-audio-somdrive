@@ -4,6 +4,7 @@ import { getFirestore, doc, getDoc, setDoc } from "firebase/firestore/lite";
 import { SeoConfig, PageSeoItem, FaqItem } from "../types";
 import { DEFAULT_SEO_CONFIG } from "../lib/useSeoHead";
 import firebaseConfig from "../../firebase-applet-config.json";
+import AdminBrandingManager from "./AdminBrandingManager";
 import {
   Globe,
   Search,
@@ -26,7 +27,8 @@ import {
   Smartphone,
   Monitor,
   Copy,
-  ExternalLink
+  ExternalLink,
+  Image
 } from "lucide-react";
 
 function getDb() {
@@ -230,6 +232,7 @@ export default function AdminSeoManager() {
       {/* NAVIGATION TABS */}
       <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-thin border-b border-border-main/60">
         {[
+          { id: "branding", label: "0. Identidade Visual", icon: Image },
           { id: "main", label: "1. SEO Principal", icon: Globe },
           { id: "keywords", label: "2. Palavras-Chave", icon: Tag },
           { id: "og", label: "3. Open Graph", icon: Share2 },
@@ -259,6 +262,11 @@ export default function AdminSeoManager() {
           );
         })}
       </div>
+
+      {/* TAB 0: IDENTIDADE VISUAL */}
+      {activeTab === "branding" && (
+        <AdminBrandingManager />
+      )}
 
       {/* TAB 1: SEO PRINCIPAL */}
       {activeTab === "main" && (

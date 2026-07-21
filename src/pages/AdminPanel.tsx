@@ -28,6 +28,7 @@ import { auth, db, handleFirestoreError, OperationType } from "../firebase";
 import { Ad, SeoConfig, resolveAdImageSrc } from "../types";
 import PublicAdCard from "../components/PublicAdCard";
 import AdminSeoManager from "../components/AdminSeoManager";
+import AdminBrandingManager from "../components/AdminBrandingManager";
 import config from "../../firebase-applet-config.json";
 
 const AdThumbnail = ({ ad, posId }: { ad: any; posId: string }) => {
@@ -1163,6 +1164,18 @@ export default function AdminPanel({ onNavigate }: AdminPanelProps) {
               <span>SEO & Meta Tags</span>
             </button>
 
+            <button
+              onClick={() => { setActiveTab("branding"); setIsAdFormOpen(false); }}
+              className={`flex items-center gap-2.5 px-4 py-3 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap lg:w-full ${
+                activeTab === "branding" 
+                  ? "bg-card-selected text-green-primary border border-green-primary/15" 
+                  : "text-text-sec hover:bg-card-inner hover:text-text-main"
+              }`}
+            >
+              <ImageIcon className="h-4 w-4" />
+              <span>Identidade Visual</span>
+            </button>
+
 
 
             <button
@@ -1844,6 +1857,11 @@ export default function AdminPanel({ onNavigate }: AdminPanelProps) {
           {/* TAB 2: SEO META MANAGER */}
           {activeTab === "seo" && (
             <AdminSeoManager />
+          )}
+
+          {/* TAB 2.5: BRANDING MANAGER */}
+          {activeTab === "branding" && (
+            <AdminBrandingManager />
           )}
 
           {false && (

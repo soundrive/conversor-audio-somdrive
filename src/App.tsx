@@ -87,6 +87,42 @@ export default function App() {
   const [ads, setAds] = useState<Ad[]>([]);
   const [failedAdIds, setFailedAdIds] = useState<string[]>([]);
 
+  // Branding (logo and alt text) state
+  const [branding, setBranding] = useState<{
+    logoUrl: string;
+    logoStoragePath: string;
+    logoAlt: string;
+  }>({
+    logoUrl: "",
+    logoStoragePath: "",
+    logoAlt: "Conversor SomDrive"
+  });
+
+  // Real-time listener for site branding configuration
+  useEffect(() => {
+    const docRef = doc(db, "site_settings", "branding");
+    const unsubscribe = onSnapshot(docRef, (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        setBranding({
+          logoUrl: data.logoUrl || "",
+          logoStoragePath: data.logoStoragePath || "",
+          logoAlt: data.logoAlt || "Conversor SomDrive"
+        });
+      }
+    }, (err) => {
+      console.warn("[APP] Error subscribing to site branding:", err);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // Compute header logo source with 3-tier fallback
+  const headerLogoSrc = branding.logoUrl
+    ? branding.logoUrl
+    : branding.logoStoragePath
+      ? `/api/ads-public-image?path=${encodeURIComponent(branding.logoStoragePath)}`
+      : (seoConfig.siteLogoUrl || "/logo-somdrive.png");
+
   // Navigate function for pathname routing
   const navigateTo = (path: string) => {
     window.history.pushState(null, "", path);
@@ -562,10 +598,14 @@ export default function App() {
           >
             <div className="w-12 h-12 bg-card-inner rounded-xl border border-border-main overflow-hidden shadow-inner flex items-center justify-center p-1 group-hover:scale-105 transition-transform duration-300">
               <img 
-                src="/logo-somdrive.png" 
-                alt="Conversor SomDrive" 
+                src={headerLogoSrc} 
+                alt={branding.logoAlt || "Conversor SomDrive"} 
                 className="max-w-full max-h-full object-contain"
                 referrerPolicy="no-referrer"
+                onError={(e) => {
+                  e.currentTarget.onerror = null;
+                  e.currentTarget.src = "/logo-somdrive.png";
+                }}
               />
             </div>
             <div>
