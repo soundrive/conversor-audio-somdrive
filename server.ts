@@ -2,7 +2,6 @@ import express from "express";
 import path from "path";
 import fs from "fs";
 import dotenv from "dotenv";
-import { createServer as createViteServer } from "vite";
 import { initializeApp } from "firebase/app";
 import { getFirestore, doc, getDoc } from "firebase/firestore";
 import { S3Client, PutObjectCommand, DeleteObjectCommand, GetObjectCommand, HeadObjectCommand } from "@aws-sdk/client-s3";
@@ -72,10 +71,16 @@ function getAnalyticsClient(): BetaAnalyticsDataClient {
 // Load Firebase configuration
 let firebaseConfig: any = null;
 try {
-  const configContent = fs.readFileSync("./firebase-applet-config.json", "utf-8");
+  const configPath = path.join(process.cwd(), "firebase-applet-config.json");
+  const configContent = fs.readFileSync(configPath, "utf-8");
   firebaseConfig = JSON.parse(configContent);
 } catch (err) {
-  console.error("[SERVER] Failed to read firebase-applet-config.json:", err);
+  try {
+    const configContent = fs.readFileSync("./firebase-applet-config.json", "utf-8");
+    firebaseConfig = JSON.parse(configContent);
+  } catch (err2) {
+    console.error("[SERVER] Failed to read firebase-applet-config.json:", err2);
+  }
 }
 
 // Initialize Firebase Client
@@ -841,6 +846,7 @@ app.use(express.json());
   if (process.env.NODE_ENV !== "production") {
     (async () => {
       console.log("[SERVER] Starting Vite in development mode...");
+      const { createServer: createViteServer } = await import("vite");
       const vite = await createViteServer({
         server: { middlewareMode: true },
         appType: "spa"
