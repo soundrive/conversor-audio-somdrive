@@ -17,13 +17,17 @@ import {
   LogOut,
   Sparkles,
   AlertCircle,
-  Volume2
+  Volume2,
+  MousePointerClick,
+  TrendingUp,
+  BarChart3
 } from "lucide-react";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import { collection, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, query, orderBy, serverTimestamp, onSnapshot } from "firebase/firestore";
 import { auth, db, handleFirestoreError, OperationType } from "../firebase";
 import { Ad, SeoConfig, resolveAdImageSrc } from "../types";
 import PublicAdCard from "../components/PublicAdCard";
+import AdminSeoManager from "../components/AdminSeoManager";
 import config from "../../firebase-applet-config.json";
 
 const AdThumbnail = ({ ad, posId }: { ad: any; posId: string }) => {
@@ -257,6 +261,39 @@ export default function AdminPanel({ onNavigate }: AdminPanelProps) {
   const [authStatus, setAuthStatus] = useState<'loading' | 'unauthenticated' | 'forbidden' | 'authorized' | 'error'>('loading');
   const [authError, setAuthError] = useState<any>(null);
   const [retryTrigger, setRetryTrigger] = useState<number>(0);
+
+  // Real-time click analytics state
+  const [clickStats, setClickStats] = useState<any[]>([]);
+
+  const formatClickDate = (isoString?: string | null) => {
+    if (!isoString) return "Nenhum clique registrado";
+    try {
+      const date = new Date(isoString);
+      if (isNaN(date.getTime())) return "Nenhum clique registrado";
+      return new Intl.DateTimeFormat("pt-BR", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit"
+      }).format(date);
+    } catch (e) {
+      return "Nenhum clique registrado";
+    }
+  };
+
+  // Real-time listener for ad_click_stats collection
+  useEffect(() => {
+    if (authStatus !== 'authorized') return;
+    const qStats = query(collection(db, "ad_click_stats"));
+    const unsubStats = onSnapshot(qStats, (snap) => {
+      const list = snap.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
+      setClickStats(list);
+    }, (err) => {
+      console.warn("[ADMIN STATS] ad_click_stats listener warning:", err);
+    });
+    return () => unsubStats();
+  }, [authStatus]);
 
   // Brand Logo upload states
   const [logoUploading, setLogoUploading] = useState<boolean>(false);
@@ -524,6 +561,8 @@ export default function AdminPanel({ onNavigate }: AdminPanelProps) {
             position: data.position || "sidebar_top",
             active: isCurrentlyActive,
             isActive: isCurrentlyActive, // backwards compatibility
+            clickCount: Number(data.clickCount || 0),
+            lastClickedAt: data.lastClickedAt?.toDate ? data.lastClickedAt.toDate().toISOString() : (data.lastClickedAt || null),
             startDate: data.startDate || "",
             endDate: data.endDate || "",
             createdAt: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : (data.createdAt || ""),
@@ -572,6 +611,8 @@ export default function AdminPanel({ onNavigate }: AdminPanelProps) {
               position: data.position || "sidebar_top",
               active: isCurrentlyActive,
               isActive: isCurrentlyActive, // backwards compatibility
+              clickCount: Number(data.clickCount || 0),
+              lastClickedAt: data.lastClickedAt?.toDate ? data.lastClickedAt.toDate().toISOString() : (data.lastClickedAt || null),
               startDate: data.startDate || "",
               endDate: data.endDate || "",
               createdAt: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : (data.createdAt || ""),
@@ -1186,8 +1227,68 @@ export default function AdminPanel({ onNavigate }: AdminPanelProps) {
                     </button>
                   </div>
 
+                  {/* RESUMO DE DESEMPENHO DOS ANÚNCIOS */}
                   {(() => {
-                    const validPositions = ["sidebar_top", "sidebar_middle", "sidebar_bottom", "below_how_it_works", "below_pdf_tools", "page_bottom"];
+                    const activeAdsCount = ads.filter(a => a.active || a.isActive).length;
+                    const totalClicksCount = ads.reduce((acc, a) => acc + (a.clickCount || 0), 0);
+                    const sortedByClicks = [...ads].sort((a, b) => (b.clickCount || 0) - (a.clickCount || 0));
+                    const topAd = sortedByClicks[0];
+
+                    const date7DaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+                    const date30DaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+
+                    const clicks7Days = clickStats
+                      .filter((s: any) => s.date >= date7DaysAgo)
+                      .reduce((acc: number, s: any) => acc + (Number(s.clickCount) || 0), 0);
+
+                    const clicks30Days = clickStats
+                      .filter((s: any) => s.date >= date30DaysAgo)
+                      .reduce((acc: number, s: any) => acc + (Number(s.clickCount) || 0), 0);
+
+                    return (
+                      <div className="bg-bg-sec p-5 rounded-2xl border border-border-main space-y-3 text-left">
+                        <div className="flex items-center justify-between border-b border-border-main pb-2">
+                          <span className="text-xs font-extrabold text-[#F5F7F8] uppercase tracking-wider flex items-center gap-2">
+                            <BarChart3 className="h-4 w-4 text-green-primary" />
+                            Resumo Real de Desempenho dos Anúncios
+                          </span>
+                          <span className="text-[10px] text-text-muted font-mono font-bold">Relatório Firestore</span>
+                        </div>
+
+                        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+                          <div className="bg-card-main p-3 rounded-xl border border-border-main">
+                            <span className="text-[10px] text-text-muted font-bold uppercase tracking-wider block">Ativos</span>
+                            <span className="text-base font-extrabold text-green-primary mt-0.5 block">{activeAdsCount}</span>
+                          </div>
+
+                          <div className="bg-card-main p-3 rounded-xl border border-border-main">
+                            <span className="text-[10px] text-text-muted font-bold uppercase tracking-wider block">Total Cliques</span>
+                            <span className="text-base font-extrabold text-[#F5F7F8] mt-0.5 block">{totalClicksCount}</span>
+                          </div>
+
+                          <div className="bg-card-main p-3 rounded-xl border border-border-main">
+                            <span className="text-[10px] text-text-muted font-bold uppercase tracking-wider block">Últimos 7 Dias</span>
+                            <span className="text-base font-extrabold text-cyan-400 mt-0.5 block">{clicks7Days}</span>
+                          </div>
+
+                          <div className="bg-card-main p-3 rounded-xl border border-border-main">
+                            <span className="text-[10px] text-text-muted font-bold uppercase tracking-wider block">Últimos 30 Dias</span>
+                            <span className="text-base font-extrabold text-amber-400 mt-0.5 block">{clicks30Days}</span>
+                          </div>
+
+                          <div className="bg-card-main p-3 rounded-xl border border-border-main col-span-2 sm:col-span-1">
+                            <span className="text-[10px] text-text-muted font-bold uppercase tracking-wider block truncate">Mais Clicado</span>
+                            <span className="text-xs font-extrabold text-emerald-400 mt-1 block truncate">
+                              {topAd && (topAd.clickCount || 0) > 0 ? `${topAd.title} (${topAd.clickCount})` : "Nenhum ainda"}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {(() => {
+                    const validPositions = ["top_banner", "sidebar_top", "sidebar_middle", "sidebar_bottom", "below_how_it_works", "below_pdf_tools", "page_bottom"];
                     const invalidAds = ads.filter(ad => !validPositions.includes(ad.position));
                     if (invalidAds.length === 0) return null;
 
@@ -1223,6 +1324,7 @@ export default function AdminPanel({ onNavigate }: AdminPanelProps) {
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     {[
+                      { id: "top_banner", name: "BANNER SUPERIOR DA PÁGINA (TOP_BANNER)" },
                       { id: "sidebar_top", name: "Lateral Superior (sidebar_top)" },
                       { id: "sidebar_middle", name: "Lateral Meio (sidebar_middle)" },
                       { id: "sidebar_bottom", name: "Lateral Inferior (sidebar_bottom)" },
@@ -1260,6 +1362,13 @@ export default function AdminPanel({ onNavigate }: AdminPanelProps) {
                                       <div className="flex items-center gap-2 mt-1 flex-wrap">
                                         <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-bold ${ad.isActive ? "bg-green-primary/10 text-green-primary border border-green-primary/20" : "bg-[#46515D]/20 text-text-muted"}`}>
                                           {ad.isActive ? "Ativo" : "Inativo"}
+                                        </span>
+                                        <span className="bg-emerald-950/60 text-emerald-400 border border-emerald-800/30 text-[9px] px-2 py-0.5 rounded-full font-extrabold flex items-center gap-1">
+                                          <MousePointerClick className="h-3 w-3" />
+                                          Cliques: {ad.clickCount || 0}
+                                        </span>
+                                        <span className="bg-card-inner text-text-muted border border-border-main text-[9px] px-2 py-0.5 rounded-full font-mono">
+                                          Último: {formatClickDate(ad.lastClickedAt)}
                                         </span>
                                         <span className="bg-cyan-950/40 text-cyan-400 border border-cyan-800/20 text-[9px] px-1.5 py-0.5 rounded-full font-mono">
                                           Ordem: {ad.order !== undefined ? ad.order : 0}
@@ -1329,6 +1438,53 @@ export default function AdminPanel({ onNavigate }: AdminPanelProps) {
                       Voltar ao Painel
                     </button>
                   </div>
+
+                  {editingAd && (
+                    <div className="bg-bg-sec p-4 rounded-2xl border border-border-main space-y-3 text-left">
+                      <span className="text-xs font-extrabold text-[#F5F7F8] uppercase tracking-wider flex items-center gap-2 border-b border-border-main pb-2">
+                        <BarChart3 className="h-4 w-4 text-green-primary" />
+                        Relatório em Tempo Real deste Anúncio
+                      </span>
+                      
+                      {(() => {
+                        const todayStr = new Date().toISOString().split("T")[0];
+                        const date7DaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+                        const date30DaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+
+                        const adStats = clickStats.filter((s: any) => s.adId === editingAd.id);
+                        const clicksToday = adStats.filter((s: any) => s.date === todayStr).reduce((acc: number, s: any) => acc + (Number(s.clickCount) || 0), 0);
+                        const clicks7 = adStats.filter((s: any) => s.date >= date7DaysAgo).reduce((acc: number, s: any) => acc + (Number(s.clickCount) || 0), 0);
+                        const clicks30 = adStats.filter((s: any) => s.date >= date30DaysAgo).reduce((acc: number, s: any) => acc + (Number(s.clickCount) || 0), 0);
+
+                        return (
+                          <div className="grid grid-cols-2 md:grid-cols-5 gap-3 text-xs">
+                            <div className="bg-card-main p-2.5 rounded-xl border border-border-main">
+                              <span className="text-[10px] text-text-muted font-bold uppercase block">Total Cliques</span>
+                              <span className="text-base font-extrabold text-green-primary">{editingAd.clickCount || 0}</span>
+                            </div>
+                            <div className="bg-card-main p-2.5 rounded-xl border border-border-main">
+                              <span className="text-[10px] text-text-muted font-bold uppercase block">Hoje</span>
+                              <span className="text-base font-extrabold text-cyan-400">{clicksToday}</span>
+                            </div>
+                            <div className="bg-card-main p-2.5 rounded-xl border border-border-main">
+                              <span className="text-[10px] text-text-muted font-bold uppercase block">7 Dias</span>
+                              <span className="text-base font-extrabold text-amber-400">{clicks7}</span>
+                            </div>
+                            <div className="bg-card-main p-2.5 rounded-xl border border-border-main">
+                              <span className="text-[10px] text-text-muted font-bold uppercase block">30 Dias</span>
+                              <span className="text-base font-extrabold text-emerald-400">{clicks30}</span>
+                            </div>
+                            <div className="bg-card-main p-2.5 rounded-xl border border-border-main col-span-2 md:col-span-1">
+                              <span className="text-[10px] text-text-muted font-bold uppercase block">Último Clique</span>
+                              <span className="text-[11px] font-extrabold text-text-main font-mono mt-0.5 block truncate">
+                                {formatClickDate(editingAd.lastClickedAt)}
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  )}
 
                   <div className="grid grid-cols-1 lg:grid-cols-[1.2fr_0.8fr] gap-8">
                     
@@ -1406,6 +1562,7 @@ export default function AdminPanel({ onNavigate }: AdminPanelProps) {
                             onChange={(e) => setAdPosition(e.target.value)}
                             className="w-full bg-bg-sec border border-border-main rounded-xl px-3 py-3 text-xs text-text-main focus:outline-none focus:border-green-primary cursor-pointer font-bold"
                           >
+                            <option value="top_banner">BANNER SUPERIOR DA PÁGINA (top_banner)</option>
                             <option value="sidebar_top">Lateral Sup</option>
                             <option value="sidebar_middle">Lateral Meio</option>
                             <option value="sidebar_bottom">Lateral Inf</option>
@@ -1686,6 +1843,10 @@ export default function AdminPanel({ onNavigate }: AdminPanelProps) {
 
           {/* TAB 2: SEO META MANAGER */}
           {activeTab === "seo" && (
+            <AdminSeoManager />
+          )}
+
+          {false && (
             <form onSubmit={handleSaveSeo} className="space-y-6">
               <div className="border-b border-border-main pb-3 text-left">
                 <h2 className="font-display font-extrabold text-[#F5F7F8] text-base uppercase tracking-wider">SEO & Identidade Visual</h2>

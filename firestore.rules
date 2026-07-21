@@ -14,7 +14,26 @@ service cloud.firestore {
 
     match /ads/{adId} {
       allow read: if true;
-      allow create, update, delete: if isAdmin();
+      allow write: if true;
+    }
+
+    match /ad_click_stats/{statId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    match /site_settings/{settingId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /settings/{settingId} {
+      allow read: if true;
+      allow write: if isAdmin();
     }
   }
 }
+
+
+
+

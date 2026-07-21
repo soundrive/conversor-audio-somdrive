@@ -27,7 +27,7 @@ export interface Ad {
   storagePath?: string;
   destinationUrl: string;
   altText: string;
-  position: string; // e.g. "sidebar_top" | "sidebar_middle" | "sidebar_bottom" | "below_how_it_works" | "below_pdf_tools" | "page_bottom"
+  position: string; // e.g. "top_banner" | "sidebar_top" | "sidebar_middle" | "sidebar_bottom" | "below_how_it_works" | "below_pdf_tools" | "page_bottom"
   isActive?: boolean; // legacy active state
   active?: boolean; // new active state
   startDate?: string | null; // ISO string or empty
@@ -35,6 +35,10 @@ export interface Ad {
   createdAt?: string;
   updatedAt?: string;
   createdBy?: string;
+
+  // Analytics click metrics
+  clickCount?: number;
+  lastClickedAt?: string | null;
 
   // New fields
   internalTitle?: string;
@@ -47,25 +51,102 @@ export interface Ad {
   customHeight?: number;
 }
 
-export interface SeoConfig {
-  siteName: string;
+export interface PageSeoItem {
   title: string;
   description: string;
-  canonical: string;
-  robots: string;
-  ogTitle: string;
-  ogDescription: string;
-  ogImage: string;
-  twitterCard: string;
-  pages: {
-    home: { title: string; description: string };
-    audio: { title: string; description: string };
-    pdf: { title: string; description: string };
-    merge: { title: string; description: string };
-    compress: { title: string; description: string };
-    imgToPdf: { title: string; description: string };
-    organize: { title: string; description: string };
+  keywords?: string[];
+  canonicalUrl?: string;
+  ogTitle?: string;
+  ogDescription?: string;
+  ogImage?: string;
+  allowIndexing?: boolean;
+  allowFollow?: boolean;
+}
+
+export interface FaqItem {
+  id: string;
+  question: string;
+  answer: string;
+}
+
+export interface SeoConfig {
+  siteName: string;
+  defaultTitle: string;
+  defaultDescription: string;
+  canonicalUrl: string;
+  language: string;
+  author: string;
+  theme: string;
+  
+  keywords: string[];
+
+  // Legacy compatibility fields
+  title?: string;
+  description?: string;
+  canonical?: string;
+  robots?: string;
+  ogTitle?: string;
+  ogDescription?: string;
+  ogImage?: string;
+  twitterCard?: string;
+
+  // Open Graph
+  openGraph: {
+    title: string;
+    description: string;
+    image: string;
+    url: string;
+    type: string;
+    siteName: string;
+    locale: string;
   };
+
+  // Twitter
+  twitter: {
+    card: string;
+    title: string;
+    description: string;
+    image: string;
+  };
+
+  // Robots & Indexing
+  robotsConfig: {
+    allowIndexing: boolean;
+    allowFollow: boolean;
+    sitemapUrl: string;
+    canonicalUrl: string;
+    blockAdmin: boolean;
+    blockPrivateRoutes: boolean;
+    blockApi: boolean;
+  };
+
+  // Structured Data
+  structuredData: {
+    webSiteName: string;
+    appName: string;
+    appCategory: string;
+    operatingSystem: string;
+    price: string;
+    priceCurrency: string;
+    browserRequirements: string;
+    description: string;
+  };
+
+  // Page specific SEO
+  pages: {
+    home: PageSeoItem;
+    audio: PageSeoItem;
+    pdf: PageSeoItem;
+    howItWorks: PageSeoItem;
+    [key: string]: PageSeoItem;
+  };
+
+  // FAQ Page items
+  faqList: FaqItem[];
+
+  updatedAt?: string;
+  updatedBy?: string;
+
   siteLogoUrl?: string;
   siteTitle?: string;
   siteSubtitle?: string;

@@ -8,6 +8,7 @@ import { getFirestore, doc, getDoc } from "firebase/firestore";
 import { S3Client, PutObjectCommand, DeleteObjectCommand, GetObjectCommand, HeadObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import firebaseConfig from "./firebase-applet-config.json";
+import adsTrackClickHandler from "./api/ads-track-click";
 
 // Load environment variables
 dotenv.config();
@@ -728,6 +729,9 @@ app.use(express.json());
       });
     }
   });
+
+  // API Route: Track ad click (atomic count)
+  app.post("/api/ads-track-click", adsTrackClickHandler);
 
   // API Route: Get Google Analytics 4 (GA4) report data
   app.get("/api/admin/analytics", requireAdminMiddleware, async (req, res) => {

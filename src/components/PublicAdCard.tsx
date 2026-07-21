@@ -1,6 +1,7 @@
 import React from "react";
 import { Ad, resolveAdImageSrc } from "../types";
 import { trackEvent } from "../lib/gtag";
+import { handleAdClick } from "../lib/adClickTracker";
 import { Image as ImageIcon } from "lucide-react";
 
 interface PublicAdCardProps {
@@ -8,9 +9,10 @@ interface PublicAdCardProps {
   ad: Ad;
   position: string;
   onImageError: (id: string) => void;
+  isAdminPreview?: boolean;
 }
 
-export default function PublicAdCard({ ad, position, onImageError }: PublicAdCardProps) {
+export default function PublicAdCard({ ad, position, onImageError, isAdminPreview = false }: PublicAdCardProps) {
   // Extract and apply fallbacks as instructed
   const publicTitle = ad.publicTitle || "";
   const description = ad.description || "";
@@ -39,8 +41,8 @@ export default function PublicAdCard({ ad, position, onImageError }: PublicAdCar
   const isExternal = destinationUrl.startsWith("http://") || destinationUrl.startsWith("https://") || destinationUrl.startsWith("//");
 
   // Track event click
-  const handleClick = () => {
-    trackEvent("ad_click", { ad_id: ad.id, ad_position: position, destination_url: destinationUrl });
+  const handleClick = (e: React.SyntheticEvent) => {
+    handleAdClick(ad, position, e, isAdminPreview);
   };
 
   const hasImage = !!(ad.imageUrl || ad.storagePath);
@@ -78,7 +80,7 @@ export default function PublicAdCard({ ad, position, onImageError }: PublicAdCar
     }
   };
 
-  const isHorizontalArea = ["below_how_it_works", "below_pdf_tools", "page_bottom"].includes(position);
+  const isHorizontalArea = ["top_banner", "below_how_it_works", "below_pdf_tools", "page_bottom"].includes(position);
   const isWideFormat = format === "wide_banner" || format === "horizontal_banner" || format === "horizontal_rectangle" || isHorizontalArea;
 
   // Compute dimensions for custom format

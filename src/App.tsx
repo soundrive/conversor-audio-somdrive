@@ -35,6 +35,7 @@ import { collection, getDocs, query, where, doc, getDoc, onSnapshot } from "fire
 import { db, handleFirestoreError, OperationType } from "./firebase";
 import { initGA, trackPageView, trackEvent, updateGAConsent } from "./lib/gtag";
 import PublicAdCard from "./components/PublicAdCard";
+import useSeoHead from "./lib/useSeoHead";
 
 
 type TabType = "inicio" | "audio" | "pdf";
@@ -42,6 +43,16 @@ type TabType = "inicio" | "audio" | "pdf";
 export default function App() {
   const [activeTab, setActiveTab] = useState<TabType>("inicio");
   const [activePdfTool, setActivePdfTool] = useState<string>("none");
+  
+  // Dynamic Head SEO management from Firestore real-time config
+  const currentRouteKey = activeTab === "audio" 
+    ? "audio" 
+    : activeTab === "pdf" 
+      ? (["merge", "compress", "imgToPdf", "organize"].includes(activePdfTool) ? activePdfTool : "pdf") 
+      : "home";
+      
+  useSeoHead(currentRouteKey);
+
   const [isMobile, setIsMobile] = useState<boolean>(false);
   const [dismissedMobileWarning, setDismissedMobileWarning] = useState<boolean>(false);
   const [currentPath, setCurrentPath] = useState<string>(window.location.pathname);
@@ -204,6 +215,7 @@ export default function App() {
   const lastTrackedRef = useRef<string>("");
   const lastTrackedTopAdId = useRef<string>("");
   const lastTrackedBottomAdId = useRef<string>("");
+  const lastTrackedTopBannerAdId = useRef<string>("");
 
   useEffect(() => {
     // Initialize Google Analytics 4
@@ -298,6 +310,14 @@ export default function App() {
     if (bottomAd && lastTrackedBottomAdId.current !== bottomAd.id) {
       lastTrackedBottomAdId.current = bottomAd.id;
       trackEvent("ad_view", { ad_id: bottomAd.id, ad_position: "sidebar_bottom" });
+    }
+  }, [ads, failedAdIds]);
+
+  useEffect(() => {
+    const topBannerAd = getActiveAdByPosition("top_banner");
+    if (topBannerAd && lastTrackedTopBannerAdId.current !== topBannerAd.id) {
+      lastTrackedTopBannerAdId.current = topBannerAd.id;
+      trackEvent("ad_view", { ad_id: topBannerAd.id, ad_position: "top_banner" });
     }
   }, [ads, failedAdIds]);
 
@@ -543,7 +563,7 @@ export default function App() {
             <div className="w-12 h-12 bg-card-inner rounded-xl border border-border-main overflow-hidden shadow-inner flex items-center justify-center p-1 group-hover:scale-105 transition-transform duration-300">
               <img 
                 src="/logo-somdrive.png" 
-                alt={seoConfig.siteTitle || seoConfig.siteName || "Logo"} 
+                alt="Conversor SomDrive" 
                 className="max-w-full max-h-full object-contain"
                 referrerPolicy="no-referrer"
               />
@@ -622,6 +642,9 @@ export default function App() {
                   exit={{ opacity: 0, y: -10 }}
                   className="space-y-8"
                 >
+                  {/* Top Banner Ad Position */}
+                  {renderAdsArea("top_banner")}
+
                   {/* Hero Welcome Banner */}
                   <div className="text-center max-w-2xl mx-auto space-y-4 py-4">
                     <div className="inline-flex items-center space-x-2 bg-[#2B333B] border border-border-main px-4 py-1.5 rounded-full text-xs font-semibold text-[#39D977]">
