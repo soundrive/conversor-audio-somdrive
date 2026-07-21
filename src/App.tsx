@@ -540,20 +540,14 @@ export default function App() {
             className="flex items-center space-x-3.5 cursor-pointer group"
             onClick={() => { navigateTo("/"); handleNavigate("inicio"); }}
           >
-            {seoConfig.siteLogoUrl ? (
-              <div className="w-12 h-12 bg-card-inner rounded-xl border border-border-main overflow-hidden shadow-inner flex items-center justify-center p-1 group-hover:scale-105 transition-transform duration-300">
-                <img 
-                  src={seoConfig.siteLogoUrl.startsWith("data:") || seoConfig.siteLogoUrl.startsWith("/") ? seoConfig.siteLogoUrl : `/api/ads-public-image?url=${encodeURIComponent(seoConfig.siteLogoUrl)}`} 
-                  alt={seoConfig.siteTitle || seoConfig.siteName || "Logo"} 
-                  className="max-w-full max-h-full object-contain"
-                  referrerPolicy="no-referrer"
-                />
-              </div>
-            ) : (
-              <div className="p-2.5 bg-card-inner rounded-xl border border-border-main text-green-primary shadow-inner transition-transform duration-300 group-hover:scale-105">
-                <Volume2 className="h-6 w-6 animate-pulse" id="logo-icon" />
-              </div>
-            )}
+            <div className="w-12 h-12 bg-card-inner rounded-xl border border-border-main overflow-hidden shadow-inner flex items-center justify-center p-1 group-hover:scale-105 transition-transform duration-300">
+              <img 
+                src="/logo-somdrive.png" 
+                alt={seoConfig.siteTitle || seoConfig.siteName || "Logo"} 
+                className="max-w-full max-h-full object-contain"
+                referrerPolicy="no-referrer"
+              />
+            </div>
             <div>
               <h1 className="font-display font-extrabold text-[18px] md:text-[22px] tracking-tight text-text-main flex items-center gap-2 leading-tight" id="header-title">
                 {seoConfig.siteTitle || seoConfig.siteName || "Conversor SunDrive"}
