@@ -17,7 +17,7 @@ import {
 import { motion } from "motion/react";
 
 interface HomeProps {
-  onNavigate: (path: "audio" | "extrair-audio") => void;
+  onNavigate: (path: "audio" | "videoToAudio" | "pdf") => void;
 }
 
 export default function Home({ onNavigate }: HomeProps) {
@@ -61,7 +61,7 @@ export default function Home({ onNavigate }: HomeProps) {
             </div>
             <div>
               <h3 className="font-display text-lg font-bold text-slate-100 flex items-center gap-1.5 group-hover:text-emerald-400 transition-colors">
-                <span>Ferramentas de Áudio</span>
+                <span>Converter Áudio</span>
               </h3>
               <p className="text-xs text-slate-400 mt-1.5 leading-relaxed">
                 Converta seus arquivos para MP3 com controle total de qualidade (64kbps até 320kbps). Perfeito para guias musicais e reduzir o peso dos seus arquivos.
@@ -70,7 +70,7 @@ export default function Home({ onNavigate }: HomeProps) {
             <ul className="text-[11px] text-slate-500 space-y-1.5 pt-2 font-medium">
               <li className="flex items-center gap-1.5">
                 <span className="w-1 h-1 bg-emerald-400 rounded-full" />
-                Conversão em lote (até 15 arquivos)
+                Conversão de arquivos de áudio
               </li>
               <li className="flex items-center gap-1.5">
                 <span className="w-1 h-1 bg-emerald-400 rounded-full" />
@@ -78,22 +78,22 @@ export default function Home({ onNavigate }: HomeProps) {
               </li>
               <li className="flex items-center gap-1.5">
                 <span className="w-1 h-1 bg-emerald-400 rounded-full" />
-                Player de original e convertido
+                Player de áudio original e convertido
               </li>
             </ul>
           </div>
 
           <div className="pt-6 flex items-center justify-between text-xs font-bold text-emerald-400 group-hover:translate-x-1 transition-transform">
-            <span>Acessar Ferramenta</span>
+            <span>Acessar Converter Áudio</span>
             <ArrowRight className="h-4 w-4" />
           </div>
         </motion.div>
 
-        {/* Card 2: Extract Audio */}
+        {/* Card 2: Vídeo para Áudio */}
         <motion.div
           whileHover={{ y: -4, transition: { duration: 0.2 } }}
           className="bg-slate-900/40 rounded-3xl border border-slate-900 p-6 md:p-8 flex flex-col justify-between shadow-xl relative overflow-hidden group cursor-pointer"
-          onClick={() => onNavigate("extrair-audio")}
+          onClick={() => onNavigate("videoToAudio")}
           id="card-extract-audio"
         >
           <div className="absolute -top-12 -right-12 w-24 h-24 bg-emerald-500/5 rounded-full blur-2xl pointer-events-none group-hover:bg-emerald-500/10 transition-colors" />
@@ -104,77 +104,78 @@ export default function Home({ onNavigate }: HomeProps) {
             </div>
             <div>
               <h3 className="font-display text-lg font-bold text-slate-100 flex items-center gap-1.5 group-hover:text-emerald-400 transition-colors">
-                <span>Extrair Áudio de Vídeo</span>
+                <span>Vídeo para Áudio</span>
               </h3>
               <p className="text-xs text-slate-400 mt-1.5 leading-relaxed">
-                Extraia a faixa de som de arquivos de vídeo MP4, MOV, MPEG, WEBM e outros diretamente para áudio MP3 no seu navegador.
+                Extraia o áudio de vídeos do computador para MP3 ou WAV, diretamente no navegador.
               </p>
             </div>
             <ul className="text-[11px] text-slate-500 space-y-1.5 pt-2 font-medium">
               <li className="flex items-center gap-1.5">
                 <span className="w-1 h-1 bg-emerald-400 rounded-full" />
-                Suporta MP4, MOV, WEBM, AVI, MKV, etc.
+                Formatos: MP4, MOV, M4V e WebM
               </li>
               <li className="flex items-center gap-1.5">
                 <span className="w-1 h-1 bg-emerald-400 rounded-full" />
-                Ignora faixas visuais de vídeo
+                Saída em MP3 ou WAV
               </li>
               <li className="flex items-center gap-1.5">
                 <span className="w-1 h-1 bg-emerald-400 rounded-full" />
-                Gera arquivos MP3 leves e otimizados
+                Sem upload / processamento local
+              </li>
+              <li className="flex items-center gap-1.5">
+                <span className="w-1 h-1 bg-emerald-400 rounded-full" />
+                Recomendado para computador
               </li>
             </ul>
           </div>
 
           <div className="pt-6 flex items-center justify-between text-xs font-bold text-emerald-400 group-hover:translate-x-1 transition-transform">
-            <span>Extrair Som</span>
+            <span>Acessar Vídeo para Áudio</span>
             <ArrowRight className="h-4 w-4" />
           </div>
         </motion.div>
 
-        {/* Card 3: PDF Tools (Disabled for now) */}
-        <div
-          className="bg-slate-900/10 rounded-3xl border border-slate-900/60 p-6 md:p-8 flex flex-col justify-between shadow-xl relative overflow-hidden opacity-60 cursor-not-allowed"
+        {/* Card 3: Ferramentas PDF */}
+        <motion.div
+          whileHover={{ y: -4, transition: { duration: 0.2 } }}
+          className="bg-slate-900/40 rounded-3xl border border-slate-900 p-6 md:p-8 flex flex-col justify-between shadow-xl relative overflow-hidden group cursor-pointer"
+          onClick={() => onNavigate("pdf")}
           id="card-pdf-tools"
         >
           <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="p-3 bg-slate-900 rounded-2xl border border-slate-800 text-slate-500 inline-block">
-                <FileText className="h-6 w-6" />
-              </div>
-              <span className="px-2.5 py-1 bg-slate-900 border border-slate-800 text-slate-400 text-[9px] uppercase font-bold rounded-full tracking-wider">
-                Fase 2 & 3
-              </span>
+            <div className="p-3 bg-emerald-500/10 rounded-2xl border border-emerald-500/20 text-emerald-400 inline-block">
+              <FileText className="h-6 w-6" />
             </div>
             <div>
-              <h3 className="font-display text-lg font-bold text-slate-400">
-                Ferramentas de PDF
+              <h3 className="font-display text-lg font-bold text-slate-100 flex items-center gap-1.5 group-hover:text-emerald-400 transition-colors">
+                <span>Ferramentas PDF</span>
               </h3>
-              <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">
-                Juntar PDFs, dividir páginas, comprimir, reordenar e proteger arquivos com senha 100% no navegador. Disponível nas próximas etapas do projeto.
+              <p className="text-xs text-slate-400 mt-1.5 leading-relaxed">
+                Juntar PDFs, comprimir, converter imagens, reorganizar e girar páginas 100% no navegador.
               </p>
             </div>
-            <ul className="text-[11px] text-slate-600 space-y-1.5 pt-2 font-medium">
+            <ul className="text-[11px] text-slate-500 space-y-1.5 pt-2 font-medium">
               <li className="flex items-center gap-1.5">
-                <span className="w-1 h-1 bg-slate-700 rounded-full" />
-                Juntar e dividir arquivos PDF
+                <span className="w-1 h-1 bg-emerald-400 rounded-full" />
+                Juntar e comprimir PDFs
               </li>
               <li className="flex items-center gap-1.5">
-                <span className="w-1 h-1 bg-slate-700 rounded-full" />
-                Excluir, girar e reordenar páginas
+                <span className="w-1 h-1 bg-emerald-400 rounded-full" />
+                Imagens para PDF
               </li>
               <li className="flex items-center gap-1.5">
-                <span className="w-1 h-1 bg-slate-700 rounded-full" />
-                Imagens para PDF & PDF para Imagens
+                <span className="w-1 h-1 bg-emerald-400 rounded-full" />
+                Girar e organizar páginas
               </li>
             </ul>
           </div>
 
-          <div className="pt-6 flex items-center justify-between text-xs font-bold text-slate-500">
-            <span>Em Breve</span>
+          <div className="pt-6 flex items-center justify-between text-xs font-bold text-emerald-400 group-hover:translate-x-1 transition-transform">
+            <span>Acessar Ferramentas PDF</span>
             <ArrowRight className="h-4 w-4" />
           </div>
-        </div>
+        </motion.div>
       </div>
 
       {/* Info Warning */}

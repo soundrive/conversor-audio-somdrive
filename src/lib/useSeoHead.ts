@@ -97,6 +97,32 @@ export const DEFAULT_SEO_CONFIG: SeoConfig = {
       canonicalUrl: "https://conversor.somdrive.com.br/como-funciona",
       allowIndexing: true,
       allowFollow: true
+    },
+    videoToAudio: {
+      title: "Extrair Áudio de Vídeo para MP3 ou WAV | SomDrive",
+      description: "Extraia o áudio de vídeos MP4, MOV, M4V e WebM para MP3 ou WAV diretamente no navegador do computador, sem enviar arquivos para servidores.",
+      keywords: [
+        "extrair áudio de vídeo",
+        "vídeo para MP3",
+        "vídeo para WAV",
+        "converter vídeo para MP3",
+        "converter vídeo para WAV",
+        "MP4 para MP3",
+        "MP4 para WAV",
+        "MOV para MP3",
+        "MOV para WAV",
+        "M4V para MP3",
+        "WebM para MP3",
+        "extrair som de vídeo",
+        "converter vídeo em áudio",
+        "conversor de vídeo para áudio",
+        "conversor de vídeo no computador",
+        "extrair áudio online grátis",
+        "conversor SomDrive"
+      ],
+      canonicalUrl: "https://conversor.somdrive.com.br/video-para-audio",
+      allowIndexing: true,
+      allowFollow: true
     }
   },
 

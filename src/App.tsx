@@ -8,6 +8,7 @@ import {
   Volume2, 
   ShieldCheck, 
   Music, 
+  Film,
   FileText, 
   Info, 
   Lock, 
@@ -27,6 +28,7 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import AudioConverter from "./pages/AudioConverter";
+import VideoToAudio from "./pages/VideoToAudio";
 import PdfTools from "./pages/PdfTools";
 import AdminPanel from "./pages/AdminPanel";
 import AdminLogin from "./pages/AdminLogin";
@@ -38,7 +40,7 @@ import PublicAdCard from "./components/PublicAdCard";
 import useSeoHead, { DEFAULT_SEO_CONFIG } from "./lib/useSeoHead";
 
 
-type TabType = "inicio" | "audio" | "pdf";
+type TabType = "inicio" | "audio" | "pdf" | "videoToAudio";
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<TabType>("inicio");
@@ -47,9 +49,11 @@ export default function App() {
   // Dynamic Head SEO management from Firestore real-time config
   const currentRouteKey = activeTab === "audio" 
     ? "audio" 
-    : activeTab === "pdf" 
-      ? (["merge", "compress", "imgToPdf", "organize"].includes(activePdfTool) ? activePdfTool : "pdf") 
-      : "home";
+    : activeTab === "videoToAudio"
+      ? "videoToAudio"
+      : activeTab === "pdf" 
+        ? (["merge", "compress", "imgToPdf", "organize"].includes(activePdfTool) ? activePdfTool : "pdf") 
+        : "home";
       
   useSeoHead(currentRouteKey);
 
@@ -247,8 +251,25 @@ export default function App() {
     loadConfigAndAds();
     loadPublicAds();
 
+    if (window.location.pathname === "/video-para-audio") {
+      setActiveTab("videoToAudio");
+    } else if (window.location.pathname === "/audio") {
+      setActiveTab("audio");
+    } else if (window.location.pathname.startsWith("/pdf")) {
+      setActiveTab("pdf");
+    }
+
     const handlePopState = () => {
       setCurrentPath(window.location.pathname);
+      if (window.location.pathname === "/video-para-audio") {
+        setActiveTab("videoToAudio");
+      } else if (window.location.pathname === "/audio") {
+        setActiveTab("audio");
+      } else if (window.location.pathname.startsWith("/pdf")) {
+        setActiveTab("pdf");
+      } else if (window.location.pathname === "/") {
+        setActiveTab("inicio");
+      }
     };
     window.addEventListener("popstate", handlePopState);
 
@@ -279,6 +300,9 @@ export default function App() {
       } else if (activeTab === "audio") {
         title = seoConfig.pages.audio.title;
         path = "/audio";
+      } else if (activeTab === "videoToAudio") {
+        title = seoConfig.pages.videoToAudio?.title || "Extrair Áudio de Vídeo | SomDrive";
+        path = "/video-para-audio";
       } else if (activeTab === "pdf") {
         if (activePdfTool === "none") {
           title = seoConfig.pages.pdf.title;
@@ -466,6 +490,11 @@ export default function App() {
     if (tab !== "pdf") {
       setActivePdfTool("none");
     }
+    const newPath = tab === "inicio" ? "/" : tab === "audio" ? "/audio" : tab === "videoToAudio" ? "/video-para-audio" : "/pdf";
+    if (window.location.pathname !== newPath) {
+      window.history.pushState({}, "", newPath);
+      setCurrentPath(newPath);
+    }
     if (mainContentRef.current) {
       mainContentRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
     } else {
@@ -613,6 +642,13 @@ export default function App() {
             >
               Converter Áudio
               {activeTab === "audio" && <span className="absolute bottom-0 left-0 w-full h-0.5 bg-green-primary rounded-full" />}
+            </button>
+            <button 
+              onClick={() => handleNavigate("videoToAudio")} 
+              className={`hover:text-green-light transition-colors cursor-pointer relative py-1 ${activeTab === "videoToAudio" ? "text-green-light" : ""}`}
+            >
+              Vídeo para Áudio
+              {activeTab === "videoToAudio" && <span className="absolute bottom-0 left-0 w-full h-0.5 bg-green-primary rounded-full" />}
             </button>
             <button 
               onClick={() => handleNavigate("pdf")} 
@@ -775,9 +811,58 @@ export default function App() {
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -10 }}
                   transition={{ duration: 0.2 }}
+                  className="bg-card-main rounded-[24px] border border-border-main shadow-lg p-6 md:p-10 text-text-main space-y-6"
+                >
+                  {/* Tool Switcher Cards */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-2xl mx-auto">
+                    {/* Audio Converter Card (ACTIVE) */}
+                    <div className="p-4 rounded-2xl border transition-all flex items-center justify-between gap-3 bg-green-primary border-green-primary text-bg-main shadow-lg shadow-green-primary/20 text-left relative overflow-hidden">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2.5 rounded-xl bg-bg-main text-green-primary border border-green-primary/30 shrink-0">
+                          <Music className="h-5 w-5" />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <h4 className="font-extrabold text-sm text-bg-main">CONVERSOR DE ÁUDIO</h4>
+                            <span className="text-[9px] font-black uppercase tracking-wider bg-bg-main text-green-primary px-2 py-0.5 rounded-full">ATIVO</span>
+                          </div>
+                          <p className="text-[11px] text-bg-main/80 font-bold">Converta arquivos de áudio (MP3, WAV, AAC, etc.)</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Video to Audio Card */}
+                    <button
+                      type="button"
+                      onClick={() => handleNavigate("videoToAudio")}
+                      className="p-4 rounded-2xl border transition-all cursor-pointer flex items-center justify-between gap-3 bg-card-inner border-border-main text-text-sec hover:border-green-primary/50 hover:text-text-main text-left group"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="p-2.5 rounded-xl bg-card-main border border-border-main text-green-primary group-hover:scale-105 transition-transform shrink-0">
+                          <Film className="h-5 w-5" />
+                        </div>
+                        <div>
+                          <h4 className="font-extrabold text-sm text-text-main group-hover:text-green-light">VÍDEO PARA ÁUDIO</h4>
+                          <p className="text-[11px] text-text-sec font-medium">Extraia áudio de vídeos MP4, MOV, WebM, etc.</p>
+                        </div>
+                      </div>
+                    </button>
+                  </div>
+
+                  <AudioConverter />
+                </motion.div>
+              )}
+
+              {activeTab === "videoToAudio" && (
+                <motion.div
+                  key="video-to-audio-view"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  transition={{ duration: 0.2 }}
                   className="bg-card-main rounded-[24px] border border-border-main shadow-lg p-6 md:p-10 text-text-main"
                 >
-                  <AudioConverter />
+                  <VideoToAudio onNavigateTab={(tab) => handleNavigate(tab as TabType)} />
                 </motion.div>
               )}
 
@@ -941,18 +1026,18 @@ export default function App() {
         {renderAdsArea("below_pdf_tools")}
 
         {/* Como Funciona Section */}
-        <section id="como-funciona" className="bg-card-main border border-border-main rounded-[28px] p-8 md:p-10 max-w-4xl mx-auto space-y-6">
+        <section id="como-funciona" className="bg-card-main border border-border-main rounded-[28px] p-8 md:p-10 max-w-4xl mx-auto space-y-8">
           <div className="text-center max-w-xl mx-auto space-y-2">
-            <h3 className="font-display text-xl font-extrabold text-text-main">Como Funciona o Conversor SomDrive</h3>
-            <p className="text-xs text-text-sec font-semibold">Simplicidade e eficiência em apenas alguns passos.</p>
+            <h3 className="font-display text-xl md:text-2xl font-extrabold text-text-main">Como Funciona o Conversor SomDrive</h3>
+            <p className="text-xs md:text-sm text-text-sec font-semibold">Simplicidade, segurança e eficiência 100% no seu computador.</p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="bg-card-inner border border-border-main rounded-2xl p-5 space-y-3">
               <div className="w-8 h-8 rounded-lg bg-green-primary/10 border border-green-primary/20 flex items-center justify-center text-green-primary font-extrabold text-sm">1</div>
               <h4 className="font-display font-bold text-sm text-text-main">Adicione os Arquivos</h4>
               <p className="text-xs text-text-sec leading-relaxed font-semibold">
-                Arraste seus arquivos de áudio ou PDF para a área de upload ou selecione-os diretamente de sua máquina.
+                Arraste seus arquivos de áudio, vídeo ou PDF para a área de upload ou selecione-os diretamente de sua máquina.
               </p>
             </div>
 
@@ -960,7 +1045,7 @@ export default function App() {
               <div className="w-8 h-8 rounded-lg bg-green-primary/10 border border-green-primary/20 flex items-center justify-center text-green-primary font-extrabold text-sm">2</div>
               <h4 className="font-display font-bold text-sm text-text-main">Ajuste as Opções</h4>
               <p className="text-xs text-text-sec leading-relaxed font-semibold">
-                Escolha a qualidade ou formato de áudio desejado, ou selecione a ferramenta PDF que deseja aplicar.
+                Escolha o formato e a qualidade desejados ou selecione a ferramenta que deseja aplicar.
               </p>
             </div>
 
@@ -968,8 +1053,53 @@ export default function App() {
               <div className="w-8 h-8 rounded-lg bg-green-primary/10 border border-green-primary/20 flex items-center justify-center text-green-primary font-extrabold text-sm">3</div>
               <h4 className="font-display font-bold text-sm text-text-main">Baixe o Resultado</h4>
               <p className="text-xs text-text-sec leading-relaxed font-semibold">
-                Inicie o processamento e faça o download instantâneo dos seus novos arquivos otimizados e prontos para uso.
+                Inicie o processamento no navegador e faça o download instantâneo do seu novo arquivo otimizado.
               </p>
+            </div>
+          </div>
+
+          {/* Sub-seção dedicada: Como Converter Vídeo para Áudio */}
+          <div className="bg-card-inner border border-border-main rounded-2xl p-6 md:p-8 space-y-5">
+            <div className="border-b border-border-main pb-3">
+              <h4 className="font-display font-extrabold text-base md:text-lg text-text-main flex items-center gap-2">
+                <Film className="h-5 w-5 text-green-primary" />
+                Como converter vídeo para áudio
+              </h4>
+              <p className="text-xs text-text-sec font-semibold mt-1">
+                Passo a passo simples para extrair o som de vídeos no computador em poucos segundos:
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+              <div className="space-y-2 bg-card-main border border-border-main p-4 rounded-xl">
+                <span className="w-6 h-6 rounded-full bg-green-primary text-bg-main flex items-center justify-center font-black text-xs">1</span>
+                <h5 className="font-extrabold text-xs text-text-main">Selecione o vídeo</h5>
+                <p className="text-[11px] text-text-sec leading-snug">Escolha um vídeo (MP4, MOV, M4V ou WebM) do computador.</p>
+              </div>
+
+              <div className="space-y-2 bg-card-main border border-border-main p-4 rounded-xl">
+                <span className="w-6 h-6 rounded-full bg-green-primary text-bg-main flex items-center justify-center font-black text-xs">2</span>
+                <h5 className="font-extrabold text-xs text-text-main">Escolha MP3 ou WAV</h5>
+                <p className="text-[11px] text-text-sec leading-snug">Defina o formato final desejado para o áudio extraído.</p>
+              </div>
+
+              <div className="space-y-2 bg-card-main border border-border-main p-4 rounded-xl">
+                <span className="w-6 h-6 rounded-full bg-green-primary text-bg-main flex items-center justify-center font-black text-xs">3</span>
+                <h5 className="font-extrabold text-xs text-text-main">Defina a qualidade</h5>
+                <p className="text-[11px] text-text-sec leading-snug">Ajuste o bitrate (64k–320k para MP3) ou taxa de amostragem para WAV.</p>
+              </div>
+
+              <div className="space-y-2 bg-card-main border border-border-main p-4 rounded-xl">
+                <span className="w-6 h-6 rounded-full bg-green-primary text-bg-main flex items-center justify-center font-black text-xs">4</span>
+                <h5 className="font-extrabold text-xs text-text-main">Marque a autorização</h5>
+                <p className="text-[11px] text-text-sec leading-snug">Confirme o consentimento para o processamento local no seu PC.</p>
+              </div>
+
+              <div className="space-y-2 bg-card-main border border-border-main p-4 rounded-xl sm:col-span-2 lg:col-span-1">
+                <span className="w-6 h-6 rounded-full bg-green-primary text-bg-main flex items-center justify-center font-black text-xs">5</span>
+                <h5 className="font-extrabold text-xs text-text-main">Converta e baixe</h5>
+                <p className="text-[11px] text-text-sec leading-snug">Clique em converter e salve o arquivo de áudio extraído.</p>
+              </div>
             </div>
           </div>
         </section>
