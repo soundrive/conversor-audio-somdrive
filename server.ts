@@ -792,21 +792,110 @@ app.use(express.json());
           limit: 15,
         });
 
-        pages = (pagesResponse.rows || []).map(row => ({
-          path: row.dimensionValues?.[0]?.value || "",
-          title: row.dimensionValues?.[1]?.value || "",
-          views: Number(row.metricValues?.[0]?.value || 0),
-          users: Number(row.metricValues?.[1]?.value || 0)
-        }));
+        pages = (pagesResponse.rows || []).map(row => {
+          const pathVal = row.dimensionValues?.[0]?.value || "";
+          return {
+            path: pathVal,
+            title: row.dimensionValues?.[1]?.value || "",
+            views: Number(row.metricValues?.[0]?.value || 0),
+            users: Number(row.metricValues?.[1]?.value || 0),
+            isAdmin: pathVal.toLowerCase().includes("admin")
+          };
+        });
       } catch (err) {
         console.error("[SERVER] Failed to query most visited pages:", err);
       }
 
-      // Query 3: Conversion Events
+      // Query 3: Locations (Country, Region, City)
+      let locations: any[] = [];
+      try {
+        const locationsResponse = await runGA4ReportREST(propertyId, {
+          dateRanges: [{ startDate: "7daysAgo", endDate: "today" }],
+          dimensions: [
+            { name: "country" },
+            { name: "region" },
+            { name: "city" }
+          ],
+          metrics: [
+            { name: "activeUsers" },
+            { name: "screenPageViews" }
+          ],
+          limit: 20
+        });
+
+        locations = (locationsResponse.rows || []).map(row => ({
+          country: row.dimensionValues?.[0]?.value || "(desconhecido)",
+          region: row.dimensionValues?.[1]?.value || "(desconhecido)",
+          city: row.dimensionValues?.[2]?.value || "(desconhecido)",
+          users: Number(row.metricValues?.[0]?.value || 0),
+          views: Number(row.metricValues?.[1]?.value || 0)
+        }));
+      } catch (err) {
+        console.error("[SERVER] Failed to query locations:", err);
+      }
+
+      // Query 4: Traffic Sources (Source / Medium)
+      let trafficSources: any[] = [];
+      try {
+        const sourcesResponse = await runGA4ReportREST(propertyId, {
+          dateRanges: [{ startDate: "7daysAgo", endDate: "today" }],
+          dimensions: [
+            { name: "sessionSource" },
+            { name: "sessionMedium" }
+          ],
+          metrics: [
+            { name: "activeUsers" },
+            { name: "sessions" }
+          ],
+          limit: 15
+        });
+
+        trafficSources = (sourcesResponse.rows || []).map(row => ({
+          source: row.dimensionValues?.[0]?.value || "(direto)",
+          medium: row.dimensionValues?.[1]?.value || "(nenhum)",
+          users: Number(row.metricValues?.[0]?.value || 0),
+          sessions: Number(row.metricValues?.[1]?.value || 0)
+        }));
+      } catch (err) {
+        console.error("[SERVER] Failed to query traffic sources:", err);
+      }
+
+      // Query 5: Devices & Technology
+      let devices: any[] = [];
+      try {
+        const devicesResponse = await runGA4ReportREST(propertyId, {
+          dateRanges: [{ startDate: "7daysAgo", endDate: "today" }],
+          dimensions: [
+            { name: "deviceCategory" },
+            { name: "operatingSystem" },
+            { name: "browser" }
+          ],
+          metrics: [
+            { name: "activeUsers" },
+            { name: "sessions" }
+          ],
+          limit: 15
+        });
+
+        devices = (devicesResponse.rows || []).map(row => ({
+          category: row.dimensionValues?.[0]?.value || "desktop",
+          os: row.dimensionValues?.[1]?.value || "Desconhecido",
+          browser: row.dimensionValues?.[2]?.value || "Desconhecido",
+          users: Number(row.metricValues?.[0]?.value || 0),
+          sessions: Number(row.metricValues?.[1]?.value || 0)
+        }));
+      } catch (err) {
+        console.error("[SERVER] Failed to query devices:", err);
+      }
+
+      // Query 6: Conversion Events
       const eventsMap: Record<string, { name: string, count: number, toolCounts?: Record<string, number> }> = {
         "audio_conversion_started": { name: "audio_conversion_started", count: 0 },
         "audio_conversion_completed": { name: "audio_conversion_completed", count: 0 },
         "audio_conversion_failed": { name: "audio_conversion_failed", count: 0 },
+        "video_audio_started": { name: "video_audio_started", count: 0 },
+        "video_audio_completed": { name: "video_audio_completed", count: 0 },
+        "video_audio_failed": { name: "video_audio_failed", count: 0 },
         "pdf_processing_started": { name: "pdf_processing_started", count: 0, toolCounts: { merge: 0, compress: 0, imgToPdf: 0, organize: 0, deleteRotate: 0 } },
         "pdf_processing_completed": { name: "pdf_processing_completed", count: 0, toolCounts: { merge: 0, compress: 0, imgToPdf: 0, organize: 0, deleteRotate: 0 } },
         "pdf_processing_failed": { name: "pdf_processing_failed", count: 0, toolCounts: { merge: 0, compress: 0, imgToPdf: 0, organize: 0, deleteRotate: 0 } },
@@ -882,6 +971,9 @@ app.use(express.json());
       return res.json({
         summary,
         pages,
+        locations,
+        trafficSources,
+        devices,
         events: Object.values(eventsMap),
         adsPerformance: Object.values(adsMap)
       });

@@ -4,7 +4,7 @@ service cloud.firestore {
     function isAdmin() {
       return request.auth != null
         && (
-          request.auth.token.email == "sertanejopremiercontato@gmail.com"
+          ('email' in request.auth.token && request.auth.token.email.matches('(?i)sertanejopremiercontato@gmail\\.com'))
           || (
             exists(/databases/$(database)/documents/admins/$(request.auth.uid))
             && get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.active == true
@@ -21,6 +21,7 @@ service cloud.firestore {
     match /ads/{adId} {
       allow read: if true;
       allow write: if isAdmin();
+      allow update: if request.resource.data.diff(resource.data).affectedKeys().hasOnly(['clickCount', 'lastClickedAt']);
     }
 
     match /ad_click_stats/{statId} {

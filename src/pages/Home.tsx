@@ -32,16 +32,32 @@ export default function Home({ onNavigate }: HomeProps) {
           className="inline-flex items-center space-x-2 bg-emerald-500/10 border border-emerald-500/20 px-3.5 py-1.5 rounded-full text-xs font-semibold text-emerald-400"
         >
           <Sparkles className="h-3.5 w-3.5 animate-pulse" />
-          <span>Central de Conversões Locais</span>
+          <span>Ferramentas Online Grátis</span>
         </motion.div>
         
         <h2 className="font-display text-3xl md:text-4xl font-extrabold tracking-tight text-slate-100" id="home-title">
-          Tudo processado no seu navegador
+          Conversor de Áudio e Ferramentas Online Grátis
         </h2>
         
         <p className="text-xs md:text-sm text-slate-400 leading-relaxed max-w-xl mx-auto" id="home-subtitle">
-          Uma central de ferramentas seguras e offline. Sem cadastro, sem login, sem servidores de conversão. Seus arquivos nunca saem do seu dispositivo.
+          Converta arquivos de áudio, extraia o som de vídeos e organize documentos PDF de forma rápida, fácil e sem cadastro.
         </p>
+
+        {/* Highlights Badges */}
+        <div className="flex flex-wrap justify-center gap-2 pt-2">
+          {[
+            "Ferramentas gratuitas",
+            "Conversão rápida",
+            "Diversos formatos",
+            "Sem necessidade de cadastro",
+            "Baixe o resultado na hora",
+            "Seus arquivos não ficam salvos"
+          ].map((highlight, idx) => (
+            <span key={idx} className="bg-slate-900 border border-slate-800 text-slate-300 text-[11px] font-semibold px-3 py-1 rounded-full">
+              ✓ {highlight}
+            </span>
+          ))}
+        </div>
       </div>
 
       {/* Grid structure for main cards */}
@@ -61,30 +77,34 @@ export default function Home({ onNavigate }: HomeProps) {
             </div>
             <div>
               <h3 className="font-display text-lg font-bold text-slate-100 flex items-center gap-1.5 group-hover:text-emerald-400 transition-colors">
-                <span>Converter Áudio</span>
+                <span>Conversor de Áudio</span>
               </h3>
               <p className="text-xs text-slate-400 mt-1.5 leading-relaxed">
-                Converta seus arquivos para MP3 com controle total de qualidade (64kbps até 320kbps). Perfeito para guias musicais e reduzir o peso dos seus arquivos.
+                Converta seus arquivos para MP3, WAV, AAC, FLAC, OGG e outros formatos com qualidade personalizada.
               </p>
             </div>
-            <ul className="text-[11px] text-slate-500 space-y-1.5 pt-2 font-medium">
+            <ul className="text-[11px] text-slate-400 space-y-1.5 pt-2 font-medium">
               <li className="flex items-center gap-1.5">
-                <span className="w-1 h-1 bg-emerald-400 rounded-full" />
-                Conversão de arquivos de áudio
+                <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full" />
+                Conversão em lote
               </li>
               <li className="flex items-center gap-1.5">
-                <span className="w-1 h-1 bg-emerald-400 rounded-full" />
-                Controle de qualidade (MP3 64k a 320k)
+                <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full" />
+                Várias opções de qualidade
               </li>
               <li className="flex items-center gap-1.5">
-                <span className="w-1 h-1 bg-emerald-400 rounded-full" />
-                Player de áudio original e convertido
+                <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full" />
+                Prévia antes do download
+              </li>
+              <li className="flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full" />
+                Download imediato
               </li>
             </ul>
           </div>
 
           <div className="pt-6 flex items-center justify-between text-xs font-bold text-emerald-400 group-hover:translate-x-1 transition-transform">
-            <span>Acessar Converter Áudio</span>
+            <span>Acessar Conversor de Áudio</span>
             <ArrowRight className="h-4 w-4" />
           </div>
         </motion.div>
@@ -107,27 +127,30 @@ export default function Home({ onNavigate }: HomeProps) {
                 <span>Vídeo para Áudio</span>
               </h3>
               <p className="text-xs text-slate-400 mt-1.5 leading-relaxed">
-                Extraia o áudio de vídeos do computador para MP3 ou WAV, diretamente no navegador.
+                Extraia o áudio de vídeos MP4, MOV, M4V e WebM e baixe o resultado em MP3 ou WAV.
               </p>
             </div>
-            <ul className="text-[11px] text-slate-500 space-y-1.5 pt-2 font-medium">
+            <ul className="text-[11px] text-slate-400 space-y-1.5 pt-2 font-medium">
               <li className="flex items-center gap-1.5">
-                <span className="w-1 h-1 bg-emerald-400 rounded-full" />
-                Formatos: MP4, MOV, M4V e WebM
+                <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full" />
+                MP3 ou WAV
               </li>
               <li className="flex items-center gap-1.5">
-                <span className="w-1 h-1 bg-emerald-400 rounded-full" />
-                Saída em MP3 ou WAV
+                <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full" />
+                Escolha de qualidade
               </li>
               <li className="flex items-center gap-1.5">
-                <span className="w-1 h-1 bg-emerald-400 rounded-full" />
-                Sem upload / processamento local
+                <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full" />
+                Processo rápido
               </li>
               <li className="flex items-center gap-1.5">
-                <span className="w-1 h-1 bg-emerald-400 rounded-full" />
-                Recomendado para computador
+                <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full" />
+                Download na hora
               </li>
             </ul>
+            <p className="text-[11px] text-emerald-400/90 font-semibold pt-1">
+              🔒 Seus arquivos não ficam salvos.
+            </p>
           </div>
 
           <div className="pt-6 flex items-center justify-between text-xs font-bold text-emerald-400 group-hover:translate-x-1 transition-transform">
@@ -149,24 +172,28 @@ export default function Home({ onNavigate }: HomeProps) {
             </div>
             <div>
               <h3 className="font-display text-lg font-bold text-slate-100 flex items-center gap-1.5 group-hover:text-emerald-400 transition-colors">
-                <span>Ferramentas PDF</span>
+                <span>Ferramentas PDF Grátis</span>
               </h3>
               <p className="text-xs text-slate-400 mt-1.5 leading-relaxed">
-                Juntar PDFs, comprimir, converter imagens, reorganizar e girar páginas 100% no navegador.
+                Junte, organize, gire, exclua páginas e compacte seus arquivos PDF com poucos cliques.
               </p>
             </div>
-            <ul className="text-[11px] text-slate-500 space-y-1.5 pt-2 font-medium">
+            <ul className="text-[11px] text-slate-400 space-y-1.5 pt-2 font-medium">
               <li className="flex items-center gap-1.5">
-                <span className="w-1 h-1 bg-emerald-400 rounded-full" />
-                Juntar e comprimir PDFs
+                <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full" />
+                Juntar PDFs
               </li>
               <li className="flex items-center gap-1.5">
-                <span className="w-1 h-1 bg-emerald-400 rounded-full" />
-                Imagens para PDF
+                <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full" />
+                Organizar páginas
               </li>
               <li className="flex items-center gap-1.5">
-                <span className="w-1 h-1 bg-emerald-400 rounded-full" />
-                Girar e organizar páginas
+                <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full" />
+                Girar e excluir páginas
+              </li>
+              <li className="flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full" />
+                Compactar documentos
               </li>
             </ul>
           </div>
@@ -179,10 +206,10 @@ export default function Home({ onNavigate }: HomeProps) {
       </div>
 
       {/* Info Warning */}
-      <div className="bg-slate-950/40 rounded-2xl border border-slate-900/60 p-4 flex items-start space-x-3 max-w-3xl mx-auto" id="local-security-card">
-        <Info className="h-4.5 w-4.5 text-emerald-400 mt-0.5 shrink-0" id="info-icon" />
-        <p className="text-xs text-slate-400 leading-relaxed" id="security-disclaimer">
-          Seus arquivos são processados diretamente no seu dispositivo e não ficam armazenados em nossos servidores. Ao atualizar ou fechar a aba, a memória local é 100% liberada.
+      <div className="bg-slate-950/40 rounded-2xl border border-slate-900/60 p-4 flex items-center justify-center space-x-3 max-w-3xl mx-auto text-center" id="local-security-card">
+        <ShieldCheck className="h-5 w-5 text-emerald-400 shrink-0" id="info-icon" />
+        <p className="text-xs text-slate-300 font-medium leading-relaxed" id="security-disclaimer">
+          Não guardamos seus arquivos. Ao fechar ou atualizar a página, o conteúdo da conversão é descartado.
         </p>
       </div>
     </div>

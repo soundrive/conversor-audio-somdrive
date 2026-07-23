@@ -123,6 +123,127 @@ export const DEFAULT_SEO_CONFIG: SeoConfig = {
       canonicalUrl: "https://conversor.somdrive.com.br/video-para-audio",
       allowIndexing: true,
       allowFollow: true
+    },
+    imagesToPdf: {
+      title: "Imagens para PDF Grátis: JPG, PNG e WEBP | SomDrive",
+      description: "Transforme imagens JPG, PNG e WEBP em um único arquivo PDF, organize a ordem das páginas e baixe gratuitamente.",
+      keywords: [
+        "imagens para PDF",
+        "JPG para PDF",
+        "PNG para PDF",
+        "WEBP para PDF",
+        "converter imagem em PDF",
+        "transformar foto em PDF",
+        "juntar imagens em PDF",
+        "criar PDF com imagens",
+        "fotos para PDF",
+        "converter JPG para PDF grátis",
+        "converter PNG para PDF online"
+      ],
+      canonicalUrl: "https://conversor.somdrive.com.br/pdf/imagens-para-pdf",
+      allowIndexing: true,
+      allowFollow: true
+    },
+    pdfToImages: {
+      title: "PDF para JPG ou PNG Grátis | SomDrive",
+      description: "Converta páginas de PDF para imagens JPG ou PNG, escolha a resolução e baixe individualmente ou em arquivo ZIP.",
+      keywords: [
+        "PDF para JPG",
+        "PDF para PNG",
+        "converter PDF em imagem",
+        "transformar PDF em JPG",
+        "PDF em PNG",
+        "extrair páginas do PDF como imagem",
+        "converter PDF para imagens grátis",
+        "baixar páginas do PDF em JPG",
+        "PDF para imagem online"
+      ],
+      canonicalUrl: "https://conversor.somdrive.com.br/pdf/pdf-para-imagens",
+      allowIndexing: true,
+      allowFollow: true
+    },
+    imageConverter: {
+      title: "Conversor de Imagens Grátis: JPG, PNG, WEBP e AVIF | SomDrive",
+      description: "Converta imagens entre JPG, PNG, WEBP, AVIF e BMP gratuitamente, com qualidade personalizada e download em lote.",
+      keywords: [
+        "conversor de imagens",
+        "converter JPG para PNG",
+        "converter PNG para JPG",
+        "WEBP para PNG",
+        "WEBP para JPG",
+        "AVIF para JPG",
+        "BMP para PNG",
+        "converter foto online",
+        "conversor de imagem gratis"
+      ],
+      canonicalUrl: "https://conversor.somdrive.com.br/imagem/converter",
+      allowIndexing: true,
+      allowFollow: true
+    },
+    imageCompressor: {
+      title: "Comprimir Imagem Grátis: JPG, PNG e WEBP | SomDrive",
+      description: "Reduza o tamanho de imagens JPG, PNG, WEBP e AVIF gratuitamente, mantendo uma boa qualidade e baixando individualmente ou em ZIP.",
+      keywords: [
+        "comprimir imagem",
+        "reduzir tamanho de imagem",
+        "diminuir imagem",
+        "comprimir JPG",
+        "comprimir PNG",
+        "comprimir WEBP",
+        "reduzir MB da foto",
+        "diminuir tamanho da foto",
+        "otimizar imagem",
+        "compactar imagem",
+        "compressor de imagem grátis",
+        "reduzir peso da imagem",
+        "comprimir fotos online",
+        "diminuir KB da imagem",
+        "reduzir tamanho JPG"
+      ],
+      canonicalUrl: "https://conversor.somdrive.com.br/imagem/comprimir",
+      allowIndexing: true,
+      allowFollow: true
+    },
+    imageResizer: {
+      title: "Redimensionar Imagem Grátis em Pixels e Porcentagem | SomDrive",
+      description: "Redimensione imagens JPG, PNG, WEBP e AVIF em pixels, porcentagem ou tamanhos prontos, com download individual ou em lote.",
+      keywords: [
+        "redimensionar imagem",
+        "alterar tamanho de imagem",
+        "diminuir imagem",
+        "aumentar imagem",
+        "mudar largura e altura da foto",
+        "redimensionar JPG",
+        "redimensionar PNG",
+        "redimensionar WEBP",
+        "imagem 1080x1080",
+        "imagem 1080x1920",
+        "imagem 1280x720",
+        "redimensionar foto online",
+        "alterar pixels da imagem",
+        "redimensionar imagem grátis"
+      ],
+      canonicalUrl: "https://conversor.somdrive.com.br/imagem/redimensionar",
+      allowIndexing: true,
+      allowFollow: true
+    },
+    imageCropper: {
+      title: "Cortar Imagem Grátis e Criar Tamanhos para Redes Sociais | SomDrive",
+      description: "Recorte imagens livremente ou crie vários tamanhos prontos para Instagram, YouTube, Facebook, TikTok e documentos de uma só vez.",
+      keywords: [
+        "cortar imagem",
+        "recortar foto online",
+        "cortar foto gratis",
+        "cortar imagem instagram",
+        "recortar foto 3x4",
+        "pacote de cortes",
+        "cortar foto 1080x1080",
+        "cortar foto para stories",
+        "cortar imagem youtube thumbnail"
+      ],
+      canonicalUrl: "https://conversor.somdrive.com.br/imagem/cortar",
+      allowIndexing: true,
+      allowFollow: true
     }
   },
 

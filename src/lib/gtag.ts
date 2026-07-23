@@ -115,16 +115,13 @@ export function trackEvent(eventName: string, params: Record<string, any> = {}) 
   try {
     // Scrub potential personally identifiable info (PII) before sending
     const cleanParams: Record<string, any> = {};
-    const sensitiveKeywords = [
-      "name", "email", "file", "filename", "fileName", "file_name", 
-      "content", "audio", "pdf", "ip", "token", "uid", "user", 
-      "username", "password", "key", "secret", "auth"
-    ];
+    const safeKeys = ["tool_name", "input_format", "output_format", "quality", "file_count", "files_count", "success", "ad_id", "ad_position", "format", "tool", "category"];
+    const piiKeywords = ["email", "filename", "file_name", "content", "ip", "token", "uid", "user", "username", "password", "key", "secret", "auth"];
 
     for (const [key, value] of Object.entries(params)) {
-      const isSensitive = sensitiveKeywords.some((keyword) =>
-        key.toLowerCase().includes(keyword)
-      );
+      const lowerKey = key.toLowerCase();
+      const isExplicitlySafe = safeKeys.includes(lowerKey);
+      const isSensitive = !isExplicitlySafe && piiKeywords.some((keyword) => lowerKey.includes(keyword));
 
       if (!isSensitive) {
         cleanParams[key] = value;

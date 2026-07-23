@@ -643,6 +643,12 @@ export default function AudioConverter({ onBack }: AudioConverterProps = {}) {
       setCurrentProcessingIndex(i);
       setQueue((prev) => prev.map((q, idx) => idx === i ? { ...q, status: "preparando", progress: 10 } : q));
 
+      // Track individual file conversion start
+      trackEvent("audio_conversion_started", {
+        format: selectedFormat,
+        input_format: currentItem.file.name.split(".").pop()?.toLowerCase() || ""
+      });
+
       try {
         const arrayBuffer = await currentItem.file.arrayBuffer();
         const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
@@ -1497,7 +1503,7 @@ export default function AudioConverter({ onBack }: AudioConverterProps = {}) {
                   <div>
                     <h4 className="text-[11px] font-bold text-green-primary">Qualidade Lossless Estúdio</h4>
                     <p className="text-[10px] text-text-sec leading-relaxed mt-0.5 font-semibold">
-                      O codec FLAC comprime o áudio de forma 100% fiel, ideal para preservação de alta fidelidade de estúdio.
+                      O formato FLAC mantém a qualidade máxima de estúdio com compressão sem perdas.
                     </p>
                   </div>
                 </div>
@@ -1645,11 +1651,11 @@ export default function AudioConverter({ onBack }: AudioConverterProps = {}) {
             <p className="text-xs text-[#AEB8C1] leading-relaxed font-semibold">
               {zipWarningType === "warning-100" ? (
                 <>
-                  O tamanho total dos arquivos convertidos é excessivo (<strong>{formatBytes(queue.filter(item => item.status === "concluido").reduce((sum, item) => sum + (item.convertedSize || 0), 0))}</strong>). Recomendamos baixar os arquivos individualmente para evitar travamento do navegador. Se preferir, você ainda pode tentar gerar o arquivo ZIP localmente.
+                  O tamanho total dos arquivos convertidos é elevado (<strong>{formatBytes(queue.filter(item => item.status === "concluido").reduce((sum, item) => sum + (item.convertedSize || 0), 0))}</strong>). Recomendamos baixar os arquivos individualmente para maior rapidez. Se preferir, você ainda pode tentar gerar o arquivo ZIP.
                 </>
               ) : (
                 <>
-                  O tamanho total dos arquivos convertidos é grande (<strong>{formatBytes(queue.filter(item => item.status === "concluido").reduce((sum, item) => sum + (item.convertedSize || 0), 0))}</strong>). A geração do arquivo ZIP pode demorar em celulares ou dispositivos com pouca RAM. Deseja prosseguir?
+                  O tamanho total dos arquivos convertidos é grande (<strong>{formatBytes(queue.filter(item => item.status === "concluido").reduce((sum, item) => sum + (item.convertedSize || 0), 0))}</strong>). A geração do arquivo ZIP pode demorar em alguns dispositivos. Deseja prosseguir?
                 </>
               )}
             </p>

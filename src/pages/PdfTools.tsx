@@ -29,8 +29,10 @@ import { motion, AnimatePresence } from "motion/react";
 import { PDFDocument, degrees, PDFRawStream, PDFDict, PDFName, PDFNumber } from "pdf-lib";
 import * as pdfjs from "pdfjs-dist";
 import { trackEvent } from "../lib/gtag";
+import ImagesToPdf from "./pdf/ImagesToPdf";
+import PdfToImages from "./pdf/PdfToImages";
 
-type PdfToolType = "none" | "merge" | "compress" | "imgToPdf" | "organize" | "deleteRotate";
+type PdfToolType = "none" | "merge" | "compress" | "imgToPdf" | "pdfToImages" | "organize" | "deleteRotate";
 
 interface FileItem {
   id: string;
@@ -1579,7 +1581,8 @@ export default function PdfTools({ activeTool: propActiveTool, setActiveTool: pr
             {activeTool === "none" ? "Suíte de Ferramentas PDF Local" : `Ferramenta: ${
               activeTool === "merge" ? "Juntar PDF" :
               activeTool === "compress" ? "Comprimir PDF" :
-              activeTool === "imgToPdf" ? "Imagem para PDF" :
+              activeTool === "imgToPdf" ? "Imagens para PDF" :
+              activeTool === "pdfToImages" ? "PDF para Imagens" :
               activeTool === "organize" ? "Organizar Páginas" :
               "Excluir / Girar Páginas"
             }`}
@@ -1670,29 +1673,6 @@ export default function PdfTools({ activeTool: propActiveTool, setActiveTool: pr
               </div>
             </div>
 
-            {/* Tool 3: Imagens para PDF */}
-            <div 
-              className="bg-[#1B2732] border border-[#2D3B47] rounded-[24px] p-6 hover:border-[#22C96B] hover:shadow-lg transition-all duration-300 group flex flex-col justify-between h-full cursor-pointer"
-              onClick={() => setActiveTool("imgToPdf")}
-            >
-              <div className="space-y-4">
-                <div className="p-3 bg-[#202D38] text-[#22C96B] rounded-2xl border border-[#2D3B47] inline-block group-hover:scale-105 transition-all duration-300 shadow-sm">
-                  <Image className="h-6 w-6" />
-                </div>
-                <div>
-                  <h3 className="font-display font-extrabold text-base text-[#F5F7F8] group-hover:text-[#22C96B] transition-colors flex items-center gap-2">
-                    Imagens para PDF
-                  </h3>
-                  <p className="text-xs text-[#AEB8C1] mt-2 leading-relaxed font-semibold">
-                    Converta fotos e imagens (JPG, PNG, WebP) em um documento PDF organizado com layouts e margens ajustáveis.
-                  </p>
-                </div>
-              </div>
-              <div className="pt-6 border-t border-[#2D3B47] mt-4 flex justify-end text-xs font-bold text-[#22C96B] group-hover:translate-x-1 transition-transform">
-                <span>Converter imagens &rarr;</span>
-              </div>
-            </div>
-
             {/* Tool 4: Organizar PDF */}
             <div 
               className="bg-[#1B2732] border border-[#2D3B47] rounded-[24px] p-6 hover:border-[#22C96B] hover:shadow-lg transition-all duration-300 group flex flex-col justify-between h-full cursor-pointer"
@@ -1730,12 +1710,65 @@ export default function PdfTools({ activeTool: propActiveTool, setActiveTool: pr
                     Excluir / Girar Páginas
                   </h3>
                   <p className="text-xs text-[#AEB8C1] mt-2 leading-relaxed font-semibold">
-                    Gire páginas desalinhadas em 90°/180° ou descarte páginas indesejadas do seu documento PDF localmente.
+                    Gire páginas desalinhadas em 90°/180° ou descarte páginas indesejadas do seu documento PDF.
                   </p>
                 </div>
               </div>
               <div className="pt-6 border-t border-[#2D3B47] mt-4 flex justify-end text-xs font-bold text-[#22C96B] group-hover:translate-x-1 transition-transform">
                 <span>Girar & Excluir &rarr;</span>
+              </div>
+            </div>
+
+            {/* SECTION 2 HEADER: CONVERSÃO DE IMAGENS E PDF */}
+            <div className="col-span-full border-t border-[#2D3B47] pt-6 mt-2">
+              <h3 className="font-display font-extrabold text-sm text-[#22C96B] uppercase tracking-wider">
+                Conversão de Imagens e PDF
+              </h3>
+            </div>
+
+            {/* Card 1: Imagens para PDF */}
+            <div 
+              className="bg-[#1B2732] border border-[#2D3B47] rounded-[24px] p-6 hover:border-[#22C96B] hover:shadow-lg transition-all duration-300 group flex flex-col justify-between h-full cursor-pointer"
+              onClick={() => setActiveTool("imgToPdf")}
+            >
+              <div className="space-y-4">
+                <div className="p-3 bg-[#202D38] text-[#22C96B] rounded-2xl border border-[#2D3B47] inline-block group-hover:scale-105 transition-all duration-300 shadow-sm">
+                  <Image className="h-6 w-6" />
+                </div>
+                <div>
+                  <h3 className="font-display font-extrabold text-base text-[#F5F7F8] group-hover:text-[#22C96B] transition-colors flex items-center gap-2">
+                    Imagens para PDF
+                  </h3>
+                  <p className="text-xs text-[#AEB8C1] mt-2 leading-relaxed font-semibold">
+                    Transforme imagens JPG, PNG e WEBP em um único arquivo PDF, organizando a ordem das páginas antes de baixar.
+                  </p>
+                </div>
+              </div>
+              <div className="pt-6 border-t border-[#2D3B47] mt-4 flex justify-end text-xs font-bold text-[#22C96B] group-hover:translate-x-1 transition-transform">
+                <span>Imagens para PDF &rarr;</span>
+              </div>
+            </div>
+
+            {/* Card 2: PDF para Imagens */}
+            <div 
+              className="bg-[#1B2732] border border-[#2D3B47] rounded-[24px] p-6 hover:border-[#22C96B] hover:shadow-lg transition-all duration-300 group flex flex-col justify-between h-full cursor-pointer"
+              onClick={() => setActiveTool("pdfToImages")}
+            >
+              <div className="space-y-4">
+                <div className="p-3 bg-[#202D38] text-[#22C96B] rounded-2xl border border-[#2D3B47] inline-block group-hover:scale-105 transition-all duration-300 shadow-sm">
+                  <Image className="h-6 w-6" />
+                </div>
+                <div>
+                  <h3 className="font-display font-extrabold text-base text-[#F5F7F8] group-hover:text-[#22C96B] transition-colors flex items-center gap-2">
+                    PDF para Imagens
+                  </h3>
+                  <p className="text-xs text-[#AEB8C1] mt-2 leading-relaxed font-semibold">
+                    Converta cada página de um PDF em imagens JPG ou PNG e baixe individualmente ou em arquivo ZIP.
+                  </p>
+                </div>
+              </div>
+              <div className="pt-6 border-t border-[#2D3B47] mt-4 flex justify-end text-xs font-bold text-[#22C96B] group-hover:translate-x-1 transition-transform">
+                <span>PDF para Imagens &rarr;</span>
               </div>
             </div>
 
@@ -1748,10 +1781,10 @@ export default function PdfTools({ activeTool: propActiveTool, setActiveTool: pr
                   Segurança Máxima
                 </span>
                 <h3 className="font-display font-bold text-sm text-[#F5F7F8]">
-                  Sem Upload para Servidores
+                  Privacidade Garantida
                 </h3>
                 <p className="text-[11px] text-[#AEB8C1] leading-relaxed font-semibold">
-                  Seus documentos de identidade, contratos e fotos pessoais são manipulados na memória do seu próprio navegador. Nada é enviado à internet.
+                  Não guardamos seus arquivos. Ao fechar ou atualizar a página, o conteúdo é descartado.
                 </p>
               </div>
               <div className="pt-6 relative z-10 flex items-center gap-1 text-[11px] font-bold text-[#22C96B]">
@@ -1933,7 +1966,7 @@ export default function PdfTools({ activeTool: propActiveTool, setActiveTool: pr
                 <div className="p-4 bg-card-inner border border-border-main rounded-xl flex items-start space-x-3 shadow-sm">
                   <ShieldCheck className="h-4 w-4 text-green-primary shrink-0 mt-0.5" />
                   <p className="text-[10px] text-text-sec leading-relaxed font-semibold">
-                    União ultra rápida e segura. A codificação é feita localmente copiando os dicionários de páginas, preservando vetores, links e imagens em resolução total.
+                    União rápida e de alta qualidade. Seus arquivos PDF são combinados preservando vetores, links e resolução original.
                   </p>
                 </div>
               </div>
@@ -1975,7 +2008,7 @@ export default function PdfTools({ activeTool: propActiveTool, setActiveTool: pr
                   </div>
                   <div className="space-y-1">
                     <p className="text-sm font-bold text-text-main">Arraste seu PDF ou clique para carregar</p>
-                    <p className="text-xs text-text-sec">Seu arquivo será processado e compactado totalmente no navegador de forma privada.</p>
+                    <p className="text-xs text-text-sec">Seus arquivos não ficam salvos.</p>
                   </div>
                 </div>
               )}
@@ -2536,6 +2569,15 @@ export default function PdfTools({ activeTool: propActiveTool, setActiveTool: pr
 
         {/* VIEW 4: ACTIVE TOOL - IMAGES TO PDF */}
         {activeTool === "imgToPdf" && (
+          <ImagesToPdf onBack={() => setActiveTool("none")} />
+        )}
+
+        {/* VIEW 5: ACTIVE TOOL - PDF TO IMAGES */}
+        {activeTool === "pdfToImages" && (
+          <PdfToImages onBack={() => setActiveTool("none")} />
+        )}
+
+        {false && activeTool === "imgToPdf" && (
           <motion.div 
             key="img-to-pdf-tool"
             initial={{ opacity: 0, scale: 0.98 }}

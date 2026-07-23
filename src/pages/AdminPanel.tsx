@@ -2179,37 +2179,51 @@ export default function AdminPanel({ onNavigate }: AdminPanelProps) {
                     </div>
                   </div>
 
-                  {/* GRID: PAGINAS MAIS VISITADAS & CONVERSOR DE AUDIO */}
+                  {/* GRID: PAGINAS MAIS VISITADAS & DESEMPENHO POR FERRAMENTA */}
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     
-                    {/* PAGINAS VISITADAS */}
+                    {/* PAGINAS VISITADAS (PUBLIC VS ADMIN) */}
                     <div className="bg-bg-sec p-5 rounded-2xl border border-border-main space-y-4">
-                      <h3 className="text-xs font-extrabold text-text-main uppercase tracking-wider border-b border-border-main pb-2">
-                        Páginas e Telas Mais Acessadas
-                      </h3>
+                      <div className="flex items-center justify-between border-b border-border-main pb-2">
+                        <h3 className="text-xs font-extrabold text-text-main uppercase tracking-wider">
+                          Páginas e Telas Acessadas
+                        </h3>
+                        <span className="text-[10px] text-text-muted font-bold">Público vs Admin</span>
+                      </div>
                       <div className="overflow-x-auto">
                         <table className="w-full text-left text-xs font-semibold">
                           <thead>
                             <tr className="border-b border-border-main text-text-muted text-[10px] uppercase tracking-wider">
-                              <th className="pb-2 font-extrabold">Título / Caminho da Tela</th>
-                              <th className="pb-2 text-right font-extrabold">Visualizações</th>
+                              <th className="pb-2 font-extrabold">Tipo</th>
+                              <th className="pb-2 font-extrabold">Caminho / Tela</th>
+                              <th className="pb-2 text-right font-extrabold">Acessos</th>
                               <th className="pb-2 text-right font-extrabold">Usuários</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-border-main/50 text-text-sec">
                             {analyticsData.pages && analyticsData.pages.length > 0 ? (
-                              analyticsData.pages.map((page: any, i: number) => (
-                                <tr key={i} className="hover:bg-card-inner/30 transition-colors">
-                                  <td className="py-2.5 font-mono text-[11px] text-white truncate max-w-[200px]" title={page.title}>
-                                    {page.path} <span className="text-[10px] text-text-muted block font-sans truncate">{page.title}</span>
-                                  </td>
-                                  <td className="py-2.5 text-right font-mono text-green-primary font-bold">{page.views?.toLocaleString() || 0}</td>
-                                  <td className="py-2.5 text-right font-mono">{page.users?.toLocaleString() || 0}</td>
-                                </tr>
-                              ))
+                              analyticsData.pages.map((page: any, i: number) => {
+                                const isAdmin = page.isAdmin || page.path?.toLowerCase().includes("admin");
+                                return (
+                                  <tr key={i} className="hover:bg-card-inner/30 transition-colors">
+                                    <td className="py-2.5 shrink-0">
+                                      {isAdmin ? (
+                                        <span className="text-[9px] font-bold uppercase tracking-wider bg-amber-500/10 text-amber-400 border border-amber-500/30 px-1.5 py-0.5 rounded-full">Admin</span>
+                                      ) : (
+                                        <span className="text-[9px] font-bold uppercase tracking-wider bg-green-primary/10 text-green-primary border border-green-primary/30 px-1.5 py-0.5 rounded-full">Público</span>
+                                      )}
+                                    </td>
+                                    <td className="py-2.5 font-mono text-[11px] text-white truncate max-w-[180px]" title={page.title}>
+                                      {page.path} <span className="text-[10px] text-text-muted block font-sans truncate">{page.title}</span>
+                                    </td>
+                                    <td className="py-2.5 text-right font-mono text-green-primary font-bold">{page.views?.toLocaleString() || 0}</td>
+                                    <td className="py-2.5 text-right font-mono">{page.users?.toLocaleString() || 0}</td>
+                                  </tr>
+                                );
+                              })
                             ) : (
                               <tr>
-                                <td colSpan={3} className="py-4 text-center text-text-muted text-[11px]">Nenhum dado registrado para telas ainda.</td>
+                                <td colSpan={4} className="py-4 text-center text-text-muted text-[11px]">Nenhum dado registrado para telas ainda.</td>
                               </tr>
                             )}
                           </tbody>
@@ -2217,46 +2231,76 @@ export default function AdminPanel({ onNavigate }: AdminPanelProps) {
                       </div>
                     </div>
 
-                    {/* CONVERSOR DE AUDIO */}
+                    {/* DESEMPENHO POR FERRAMENTA */}
                     <div className="bg-bg-sec p-5 rounded-2xl border border-border-main space-y-4">
                       <h3 className="text-xs font-extrabold text-text-main uppercase tracking-wider border-b border-border-main pb-2">
-                        Desempenho do Conversor de Áudio
+                        Desempenho por Ferramenta
                       </h3>
                       <div className="overflow-x-auto">
                         <table className="w-full text-left text-xs font-semibold">
                           <thead>
                             <tr className="border-b border-border-main text-text-muted text-[10px] uppercase tracking-wider">
-                              <th className="pb-2 font-extrabold">Tipo de Ação</th>
-                              <th className="pb-2 text-right font-extrabold">Contagem</th>
-                              <th className="pb-2 text-right font-extrabold">Taxa de Conversão</th>
+                              <th className="pb-2 font-extrabold">Ferramenta</th>
+                              <th className="pb-2 text-right font-extrabold">Iniciadas</th>
+                              <th className="pb-2 text-right font-extrabold">Concluídas</th>
+                              <th className="pb-2 text-right font-extrabold">Taxa</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-border-main/50 text-text-sec font-mono text-[11px]">
                             {(() => {
-                              const started = analyticsData.events?.find((e: any) => e.name === "audio_conversion_started")?.count || 0;
-                              const completed = analyticsData.events?.find((e: any) => e.name === "audio_conversion_completed")?.count || 0;
-                              const failed = analyticsData.events?.find((e: any) => e.name === "audio_conversion_failed")?.count || 0;
+                              const audioStarted = analyticsData.events?.find((e: any) => e.name === "audio_conversion_started")?.count || 0;
+                              const audioCompleted = analyticsData.events?.find((e: any) => e.name === "audio_conversion_completed")?.count || 0;
+                              const audioRate = audioStarted > 0 ? Math.min(100, (audioCompleted / audioStarted) * 100).toFixed(1) : "0.0";
 
-                              const conversionRate = started > 0 ? ((completed / started) * 100).toFixed(1) : "0.0";
-                              const failureRate = started > 0 ? ((failed / started) * 100).toFixed(1) : "0.0";
+                              const videoStarted = analyticsData.events?.find((e: any) => e.name === "video_audio_started")?.count || 0;
+                              const videoCompleted = analyticsData.events?.find((e: any) => e.name === "video_audio_completed")?.count || 0;
+                              const videoRate = videoStarted > 0 ? Math.min(100, (videoCompleted / videoStarted) * 100).toFixed(1) : "0.0";
+
+                              const imageStarted = analyticsData.events?.find((e: any) => e.name === "image_conversion_started")?.count || 0;
+                              const imageCompleted = analyticsData.events?.find((e: any) => e.name === "image_conversion_completed")?.count || 0;
+                              const imageRate = imageStarted > 0 ? Math.min(100, (imageCompleted / imageStarted) * 100).toFixed(1) : "0.0";
+
+                              const pdfTools = [
+                                { id: "merge", label: "Juntar PDFs" },
+                                { id: "compress", label: "Comprimir PDF" },
+                                { id: "imgToPdf", label: "Imagens p/ PDF" },
+                                { id: "organize", label: "Organizar Páginas" },
+                                { id: "deleteRotate", label: "Excluir & Girar" }
+                              ];
 
                               return (
                                 <>
                                   <tr className="hover:bg-card-inner/30 transition-colors">
-                                    <td className="py-2.5 text-white font-sans font-bold">Iniciadas <code className="text-text-muted text-[10px] block font-mono">audio_conversion_started</code></td>
-                                    <td className="py-2.5 text-right text-green-primary font-bold">{started.toLocaleString()}</td>
-                                    <td className="py-2.5 text-right text-text-muted">—</td>
+                                    <td className="py-2.5 text-white font-sans font-bold">Conversor de Áudio</td>
+                                    <td className="py-2.5 text-right font-bold">{audioStarted.toLocaleString()}</td>
+                                    <td className="py-2.5 text-right text-green-primary font-bold">{audioCompleted.toLocaleString()}</td>
+                                    <td className="py-2.5 text-right text-[#39D977] font-bold">{audioRate}%</td>
                                   </tr>
                                   <tr className="hover:bg-card-inner/30 transition-colors">
-                                    <td className="py-2.5 text-white font-sans font-bold">Concluídas com Sucesso <code className="text-text-muted text-[10px] block font-mono">audio_conversion_completed</code></td>
-                                    <td className="py-2.5 text-right text-green-primary font-bold">{completed.toLocaleString()}</td>
-                                    <td className="py-2.5 text-right text-[#39D977] font-bold">{conversionRate}%</td>
+                                    <td className="py-2.5 text-white font-sans font-bold">Vídeo para Áudio</td>
+                                    <td className="py-2.5 text-right font-bold">{videoStarted.toLocaleString()}</td>
+                                    <td className="py-2.5 text-right text-green-primary font-bold">{videoCompleted.toLocaleString()}</td>
+                                    <td className="py-2.5 text-right text-[#39D977] font-bold">{videoRate}%</td>
                                   </tr>
                                   <tr className="hover:bg-card-inner/30 transition-colors">
-                                    <td className="py-2.5 text-white font-sans font-bold">Falhas <code className="text-text-muted text-[10px] block font-mono">audio_conversion_failed</code></td>
-                                    <td className="py-2.5 text-right text-red-500 font-bold">{failed.toLocaleString()}</td>
-                                    <td className="py-2.5 text-right text-red-400 font-bold">{failureRate}%</td>
+                                    <td className="py-2.5 text-white font-sans font-bold">Conversor de Imagens</td>
+                                    <td className="py-2.5 text-right font-bold">{imageStarted.toLocaleString()}</td>
+                                    <td className="py-2.5 text-right text-green-primary font-bold">{imageCompleted.toLocaleString()}</td>
+                                    <td className="py-2.5 text-right text-[#39D977] font-bold">{imageRate}%</td>
                                   </tr>
+                                  {pdfTools.map((t) => {
+                                    const started = analyticsData.events?.find((e: any) => e.name === "pdf_processing_started")?.toolCounts?.[t.id] || 0;
+                                    const completed = analyticsData.events?.find((e: any) => e.name === "pdf_processing_completed")?.toolCounts?.[t.id] || 0;
+                                    const rate = started > 0 ? Math.min(100, (completed / started) * 100).toFixed(1) : "0.0";
+                                    return (
+                                      <tr key={t.id} className="hover:bg-card-inner/30 transition-colors">
+                                        <td className="py-2.5 text-white font-sans font-bold">{t.label}</td>
+                                        <td className="py-2.5 text-right font-bold">{started.toLocaleString()}</td>
+                                        <td className="py-2.5 text-right text-green-primary font-bold">{completed.toLocaleString()}</td>
+                                        <td className="py-2.5 text-right text-[#39D977] font-bold">{rate}%</td>
+                                      </tr>
+                                    );
+                                  })}
                                 </>
                               );
                             })()}
@@ -2267,50 +2311,118 @@ export default function AdminPanel({ onNavigate }: AdminPanelProps) {
 
                   </div>
 
-                  {/* GRID: FERRAMENTAS PDF & ANUNCIOS */}
+                  {/* GRID: LOCALIZACAO & ORIGEM DOS VISITANTES */}
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     
-                    {/* FERRAMENTAS PDF */}
+                    {/* LOCALIZACAO DOS VISITANTES */}
                     <div className="bg-bg-sec p-5 rounded-2xl border border-border-main space-y-4">
                       <h3 className="text-xs font-extrabold text-text-main uppercase tracking-wider border-b border-border-main pb-2">
-                        Utilização das Ferramentas PDF
+                        Localização dos Visitantes
                       </h3>
                       <div className="overflow-x-auto">
                         <table className="w-full text-left text-xs font-semibold">
                           <thead>
                             <tr className="border-b border-border-main text-text-muted text-[10px] uppercase tracking-wider">
-                              <th className="pb-2 font-extrabold">Ferramenta PDF</th>
-                              <th className="pb-2 text-right font-extrabold">Iniciadas</th>
-                              <th className="pb-2 text-right font-extrabold">Concluídas</th>
-                              <th className="pb-2 text-right font-extrabold">Falhas</th>
+                              <th className="pb-2 font-extrabold">País / Região</th>
+                              <th className="pb-2 font-extrabold">Cidade</th>
+                              <th className="pb-2 text-right font-extrabold">Usuários</th>
+                              <th className="pb-2 text-right font-extrabold">Acessos</th>
                             </tr>
                           </thead>
-                          <tbody className="divide-y divide-border-main/50 text-text-sec font-mono text-[11px]">
-                            {(() => {
-                              const tools = ["merge", "compress", "imgToPdf", "organize", "deleteRotate"];
-                              const toolLabels: Record<string, string> = {
-                                merge: "Juntar PDFs",
-                                compress: "Comprimir PDF",
-                                imgToPdf: "Imagens para PDF",
-                                organize: "Organizar Páginas",
-                                deleteRotate: "Excluir & Girar"
-                              };
+                          <tbody className="divide-y divide-border-main/50 text-text-sec">
+                            {analyticsData.locations && analyticsData.locations.length > 0 ? (
+                              analyticsData.locations.map((loc: any, i: number) => (
+                                <tr key={i} className="hover:bg-card-inner/30 transition-colors">
+                                  <td className="py-2.5 text-white font-bold truncate max-w-[140px]">
+                                    {loc.country} <span className="text-[10px] text-text-muted block font-normal">{loc.region}</span>
+                                  </td>
+                                  <td className="py-2.5 text-text-sec text-[11px]">{loc.city}</td>
+                                  <td className="py-2.5 text-right font-mono text-green-primary font-bold">{loc.users?.toLocaleString() || 0}</td>
+                                  <td className="py-2.5 text-right font-mono">{loc.views?.toLocaleString() || 0}</td>
+                                </tr>
+                              ))
+                            ) : (
+                              <tr>
+                                <td colSpan={4} className="py-4 text-center text-text-muted text-[11px]">Nenhuma localização agregada no momento.</td>
+                              </tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
 
-                              return tools.map((tool) => {
-                                const started = analyticsData.events?.find((e: any) => e.name === "pdf_processing_started")?.toolCounts?.[tool] || 0;
-                                const completed = analyticsData.events?.find((e: any) => e.name === "pdf_processing_completed")?.toolCounts?.[tool] || 0;
-                                const failed = analyticsData.events?.find((e: any) => e.name === "pdf_processing_failed")?.toolCounts?.[tool] || 0;
+                    {/* ORIGEM DOS VISITANTES */}
+                    <div className="bg-bg-sec p-5 rounded-2xl border border-border-main space-y-4">
+                      <h3 className="text-xs font-extrabold text-text-main uppercase tracking-wider border-b border-border-main pb-2">
+                        Origem dos Visitantes (Tráfego)
+                      </h3>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left text-xs font-semibold">
+                          <thead>
+                            <tr className="border-b border-border-main text-text-muted text-[10px] uppercase tracking-wider">
+                              <th className="pb-2 font-extrabold">Origem / Mídia</th>
+                              <th className="pb-2 text-right font-extrabold">Usuários</th>
+                              <th className="pb-2 text-right font-extrabold">Sessões</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-border-main/50 text-text-sec">
+                            {analyticsData.trafficSources && analyticsData.trafficSources.length > 0 ? (
+                              analyticsData.trafficSources.map((src: any, i: number) => (
+                                <tr key={i} className="hover:bg-card-inner/30 transition-colors">
+                                  <td className="py-2.5 text-white font-bold font-mono text-[11px]">
+                                    {src.source} / <span className="text-green-primary">{src.medium}</span>
+                                  </td>
+                                  <td className="py-2.5 text-right font-mono text-green-primary font-bold">{src.users?.toLocaleString() || 0}</td>
+                                  <td className="py-2.5 text-right font-mono">{src.sessions?.toLocaleString() || 0}</td>
+                                </tr>
+                              ))
+                            ) : (
+                              <tr>
+                                <td colSpan={3} className="py-4 text-center text-text-muted text-[11px]">Nenhuma origem de tráfego registrada ainda.</td>
+                              </tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
 
-                                return (
-                                  <tr key={tool} className="hover:bg-card-inner/30 transition-colors">
-                                    <td className="py-2.5 text-white font-sans font-bold">{toolLabels[tool]}</td>
-                                    <td className="py-2.5 text-right font-bold">{started.toLocaleString()}</td>
-                                    <td className="py-2.5 text-right text-[#39D977] font-bold">{completed.toLocaleString()}</td>
-                                    <td className="py-2.5 text-right text-red-500 font-bold">{failed.toLocaleString()}</td>
-                                  </tr>
-                                );
-                              });
-                            })()}
+                  </div>
+
+                  {/* GRID: DISPOSITIVOS & ANUNCIOS */}
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    
+                    {/* DISPOSITIVOS E TECNOLOGIA */}
+                    <div className="bg-bg-sec p-5 rounded-2xl border border-border-main space-y-4">
+                      <h3 className="text-xs font-extrabold text-text-main uppercase tracking-wider border-b border-border-main pb-2">
+                        Dispositivos e Tecnologia
+                      </h3>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left text-xs font-semibold">
+                          <thead>
+                            <tr className="border-b border-border-main text-text-muted text-[10px] uppercase tracking-wider">
+                              <th className="pb-2 font-extrabold">Dispositivo / SO</th>
+                              <th className="pb-2 font-extrabold">Navegador</th>
+                              <th className="pb-2 text-right font-extrabold">Usuários</th>
+                              <th className="pb-2 text-right font-extrabold">Sessões</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-border-main/50 text-text-sec">
+                            {analyticsData.devices && analyticsData.devices.length > 0 ? (
+                              analyticsData.devices.map((dev: any, i: number) => (
+                                <tr key={i} className="hover:bg-card-inner/30 transition-colors">
+                                  <td className="py-2.5 text-white font-bold capitalize">
+                                    {dev.category} <span className="text-[10px] text-text-muted block font-normal">{dev.os}</span>
+                                  </td>
+                                  <td className="py-2.5 text-text-sec text-[11px]">{dev.browser}</td>
+                                  <td className="py-2.5 text-right font-mono text-green-primary font-bold">{dev.users?.toLocaleString() || 0}</td>
+                                  <td className="py-2.5 text-right font-mono">{dev.sessions?.toLocaleString() || 0}</td>
+                                </tr>
+                              ))
+                            ) : (
+                              <tr>
+                                <td colSpan={4} className="py-4 text-center text-text-muted text-[11px]">Nenhum dado de dispositivo coletado ainda.</td>
+                              </tr>
+                            )}
                           </tbody>
                         </table>
                       </div>

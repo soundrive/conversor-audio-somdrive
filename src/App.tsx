@@ -24,12 +24,21 @@ import {
   ExternalLink,
   HelpCircle,
   Settings as SettingsIcon,
-  Sun
+  Sun,
+  Share2,
+  Copy,
+  Check,
+  Sliders,
+  Maximize2
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import AudioConverter from "./pages/AudioConverter";
 import VideoToAudio from "./pages/VideoToAudio";
 import PdfTools from "./pages/PdfTools";
+import ImageConverter from "./pages/image/ImageConverter";
+import ImageCompressor from "./pages/image/ImageCompressor";
+import ImageResizer from "./pages/image/ImageResizer";
+import ImageCropper from "./pages/image/ImageCropper";
 import AdminPanel from "./pages/AdminPanel";
 import AdminLogin from "./pages/AdminLogin";
 import { Ad, SeoConfig } from "./types";
@@ -40,20 +49,40 @@ import PublicAdCard from "./components/PublicAdCard";
 import useSeoHead, { DEFAULT_SEO_CONFIG } from "./lib/useSeoHead";
 
 
-type TabType = "inicio" | "audio" | "pdf" | "videoToAudio";
+type TabType = "inicio" | "audio" | "pdf" | "videoToAudio" | "imageConverter" | "imageCompressor" | "imageResizer" | "imageCropper";
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<TabType>("inicio");
   const [activePdfTool, setActivePdfTool] = useState<string>("none");
+  const [copiedPath, setCopiedPath] = useState<string | null>(null);
+
+  const handleShareTool = (e: React.MouseEvent, path: string) => {
+    e.stopPropagation();
+    const url = `${window.location.origin}${path}`;
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(url).then(() => {
+        setCopiedPath(path);
+        setTimeout(() => setCopiedPath(null), 2000);
+      }).catch(() => {});
+    }
+  };
   
   // Dynamic Head SEO management from Firestore real-time config
   const currentRouteKey = activeTab === "audio" 
     ? "audio" 
     : activeTab === "videoToAudio"
       ? "videoToAudio"
-      : activeTab === "pdf" 
-        ? (["merge", "compress", "imgToPdf", "organize"].includes(activePdfTool) ? activePdfTool : "pdf") 
-        : "home";
+      : activeTab === "imageConverter"
+        ? "imageConverter"
+        : activeTab === "imageCompressor"
+          ? "imageCompressor"
+          : activeTab === "imageResizer"
+            ? "imageResizer"
+            : activeTab === "imageCropper"
+              ? "imageCropper"
+              : activeTab === "pdf" 
+              ? (["merge", "compress", "imgToPdf", "pdfToImages", "organize"].includes(activePdfTool) ? activePdfTool : "pdf") 
+              : "home";
       
   useSeoHead(currentRouteKey);
 
@@ -255,6 +284,14 @@ export default function App() {
       setActiveTab("videoToAudio");
     } else if (window.location.pathname === "/audio") {
       setActiveTab("audio");
+    } else if (window.location.pathname === "/imagem/converter") {
+      setActiveTab("imageConverter");
+    } else if (window.location.pathname === "/imagem/comprimir") {
+      setActiveTab("imageCompressor");
+    } else if (window.location.pathname === "/imagem/redimensionar") {
+      setActiveTab("imageResizer");
+    } else if (window.location.pathname === "/imagem/cortar") {
+      setActiveTab("imageCropper");
     } else if (window.location.pathname.startsWith("/pdf")) {
       setActiveTab("pdf");
     }
@@ -265,6 +302,14 @@ export default function App() {
         setActiveTab("videoToAudio");
       } else if (window.location.pathname === "/audio") {
         setActiveTab("audio");
+      } else if (window.location.pathname === "/imagem/converter") {
+        setActiveTab("imageConverter");
+      } else if (window.location.pathname === "/imagem/comprimir") {
+        setActiveTab("imageCompressor");
+      } else if (window.location.pathname === "/imagem/redimensionar") {
+        setActiveTab("imageResizer");
+      } else if (window.location.pathname === "/imagem/cortar") {
+        setActiveTab("imageCropper");
       } else if (window.location.pathname.startsWith("/pdf")) {
         setActiveTab("pdf");
       } else if (window.location.pathname === "/") {
@@ -490,7 +535,22 @@ export default function App() {
     if (tab !== "pdf") {
       setActivePdfTool("none");
     }
-    const newPath = tab === "inicio" ? "/" : tab === "audio" ? "/audio" : tab === "videoToAudio" ? "/video-para-audio" : "/pdf";
+    const newPath = tab === "inicio"
+      ? "/"
+      : tab === "audio"
+        ? "/audio"
+        : tab === "videoToAudio"
+          ? "/video-para-audio"
+          : tab === "imageConverter"
+            ? "/imagem/converter"
+            : tab === "imageCompressor"
+              ? "/imagem/comprimir"
+              : tab === "imageResizer"
+                ? "/imagem/redimensionar"
+                : tab === "imageCropper"
+                  ? "/imagem/cortar"
+                  : "/pdf";
+
     if (window.location.pathname !== newPath) {
       window.history.pushState({}, "", newPath);
       setCurrentPath(newPath);
@@ -509,6 +569,30 @@ export default function App() {
       mainContentRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
     } else {
       window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  };
+
+  const handleNavigatePath = (path: string) => {
+    if (path === "/imagem/converter") {
+      handleNavigate("imageConverter");
+    } else if (path === "/imagem/comprimir") {
+      handleNavigate("imageCompressor");
+    } else if (path === "/imagem/redimensionar") {
+      handleNavigate("imageResizer");
+    } else if (path === "/imagem/cortar") {
+      handleNavigate("imageCropper");
+    } else if (path === "/audio") {
+      handleNavigate("audio");
+    } else if (path === "/video-para-audio") {
+      handleNavigate("videoToAudio");
+    } else if (path === "/pdf/imagens-para-pdf") {
+      handleNavigateToPdfTool("imgToPdf");
+    } else if (path === "/pdf/pdf-para-imagens") {
+      handleNavigateToPdfTool("pdfToImages");
+    } else if (path.startsWith("/pdf")) {
+      handleNavigate("pdf");
+    } else {
+      handleNavigate("inicio");
     }
   };
 
@@ -658,6 +742,13 @@ export default function App() {
               {activeTab === "pdf" && <span className="absolute bottom-0 left-0 w-full h-0.5 bg-green-primary rounded-full" />}
             </button>
             <button 
+              onClick={() => handleNavigate("imageConverter")} 
+              className={`hover:text-green-light transition-colors cursor-pointer relative py-1 ${["imageConverter", "imageCompressor", "imageResizer", "imageCropper"].includes(activeTab) ? "text-green-light" : ""}`}
+            >
+              Ferramentas de Imagem
+              {["imageConverter", "imageCompressor", "imageResizer", "imageCropper"].includes(activeTab) && <span className="absolute bottom-0 left-0 w-full h-0.5 bg-green-primary rounded-full" />}
+            </button>
+            <button 
               onClick={() => handleScrollToSection("como-funciona")}
               className="hover:text-green-light transition-colors cursor-pointer uppercase py-1"
             >
@@ -707,7 +798,7 @@ export default function App() {
                     </div>
                     
                     <h2 className="font-display text-3xl md:text-4xl font-extrabold tracking-tight text-text-main" id="home-title">
-                      Conversor de Áudio e Ferramentas PDF
+                      Conversor de Áudio, PDF e Imagens
                     </h2>
                     
                     <p className="text-sm text-text-sec leading-relaxed max-w-xl mx-auto font-semibold" id="home-subtitle">
@@ -715,18 +806,38 @@ export default function App() {
                     </p>
                   </div>
 
-                  {/* Two Main Cards Grid */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl mx-auto" id="categories-grid">
+                  {/* Main Audio & PDF Cards */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-6xl mx-auto" id="categories-grid">
                     
                     {/* Card 1: Audio Converter */}
                     <div
-                      className="bg-card-main rounded-[28px] border border-border-main p-6 md:p-8 flex flex-col justify-between shadow-sm hover:shadow-md hover:border-green-primary transition-all duration-300 group cursor-pointer"
+                      className="bg-card-main rounded-[28px] border border-border-main p-6 md:p-8 flex flex-col justify-between shadow-sm hover:shadow-md hover:border-green-primary transition-all duration-300 group cursor-pointer relative"
                       onClick={() => handleNavigate("audio")}
                       id="card-audio-converter"
                     >
                       <div className="space-y-4">
-                        <div className="p-3.5 bg-[#303943] rounded-2xl border border-border-main text-[#39D977] inline-block group-hover:scale-105 transition-all shadow-inner">
-                          <Music className="h-6 w-6" />
+                        <div className="flex items-center justify-between">
+                          <div className="p-3.5 bg-[#303943] rounded-2xl border border-border-main text-[#39D977] inline-block group-hover:scale-105 transition-all shadow-inner">
+                            <Music className="h-6 w-6" />
+                          </div>
+                          <button
+                            type="button"
+                            onClick={(e) => handleShareTool(e, "/audio")}
+                            title="Compartilhar link do Conversor de Áudio"
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-card-inner border border-border-main hover:border-green-primary/50 text-text-sec hover:text-green-light text-xs font-bold transition-all"
+                          >
+                            {copiedPath === "/audio" ? (
+                              <>
+                                <Check className="h-3.5 w-3.5 text-green-primary" />
+                                <span className="text-green-primary">Copiado!</span>
+                              </>
+                            ) : (
+                              <>
+                                <Share2 className="h-3.5 w-3.5" />
+                                <span>Compartilhar</span>
+                              </>
+                            )}
+                          </button>
                         </div>
                         <div>
                           <h3 className="font-display text-lg font-bold text-text-main group-hover:text-green-light transition-colors leading-tight">
@@ -760,13 +871,33 @@ export default function App() {
 
                     {/* Card 2: PDF Tools */}
                     <div
-                      className="bg-card-main rounded-[28px] border border-border-main p-6 md:p-8 flex flex-col justify-between shadow-sm hover:shadow-md hover:border-green-primary transition-all duration-300 group cursor-pointer"
+                      className="bg-card-main rounded-[28px] border border-border-main p-6 md:p-8 flex flex-col justify-between shadow-sm hover:shadow-md hover:border-green-primary transition-all duration-300 group cursor-pointer relative"
                       onClick={() => handleNavigate("pdf")}
                       id="card-pdf-tools"
                     >
                       <div className="space-y-4">
-                        <div className="p-3.5 bg-[#303943] rounded-2xl border border-border-main text-[#39D977] inline-block group-hover:scale-105 transition-all shadow-inner">
-                          <FileText className="h-6 w-6" />
+                        <div className="flex items-center justify-between">
+                          <div className="p-3.5 bg-[#303943] rounded-2xl border border-border-main text-[#39D977] inline-block group-hover:scale-105 transition-all shadow-inner">
+                            <FileText className="h-6 w-6" />
+                          </div>
+                          <button
+                            type="button"
+                            onClick={(e) => handleShareTool(e, "/pdf")}
+                            title="Compartilhar link das Ferramentas PDF"
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-card-inner border border-border-main hover:border-green-primary/50 text-text-sec hover:text-green-light text-xs font-bold transition-all"
+                          >
+                            {copiedPath === "/pdf" ? (
+                              <>
+                                <Check className="h-3.5 w-3.5 text-green-primary" />
+                                <span className="text-green-primary">Copiado!</span>
+                              </>
+                            ) : (
+                              <>
+                                <Share2 className="h-3.5 w-3.5" />
+                                <span>Compartilhar</span>
+                              </>
+                            )}
+                          </button>
                         </div>
                         <div>
                           <h3 className="font-display text-lg font-bold text-text-main group-hover:text-green-light transition-colors leading-tight">
@@ -798,6 +929,270 @@ export default function App() {
                       </div>
                     </div>
 
+                  </div>
+
+                  {/* Section: Ferramentas de Imagem */}
+                  <div className="space-y-6 max-w-6xl mx-auto pt-6 border-t border-border-main/50" id="image-tools-section">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-3">
+                        <div className="p-2.5 bg-emerald-500/10 rounded-2xl border border-emerald-500/20 text-emerald-400">
+                          <Image className="h-5 w-5" />
+                        </div>
+                        <div>
+                          <h3 className="font-display text-xl font-extrabold text-text-main">
+                            Ferramentas de Imagem
+                          </h3>
+                          <p className="text-xs text-text-sec font-semibold">
+                            Converta, comprima e redimensione fotos e imagens em lote
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Four Image Cards Grid */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6" id="image-tools-grid">
+                      
+                      {/* Card 1: Conversor de Imagens */}
+                      <div
+                        className="bg-card-main rounded-[28px] border border-border-main p-6 md:p-8 flex flex-col justify-between shadow-sm hover:shadow-md hover:border-green-primary transition-all duration-300 group cursor-pointer relative"
+                        onClick={() => handleNavigate("imageConverter")}
+                        id="card-image-converter"
+                      >
+                        <div className="space-y-4">
+                          <div className="flex items-center justify-between">
+                            <div className="p-3.5 bg-[#303943] rounded-2xl border border-border-main text-[#39D977] inline-block group-hover:scale-105 transition-all shadow-inner">
+                              <Image className="h-6 w-6" />
+                            </div>
+                            <button
+                              type="button"
+                              onClick={(e) => handleShareTool(e, "/imagem/converter")}
+                              title="Compartilhar link do Conversor de Imagens"
+                              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-card-inner border border-border-main hover:border-green-primary/50 text-text-sec hover:text-green-light text-xs font-bold transition-all"
+                            >
+                              {copiedPath === "/imagem/converter" ? (
+                                <>
+                                  <Check className="h-3.5 w-3.5 text-green-primary" />
+                                  <span className="text-green-primary">Copiado!</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Share2 className="h-3.5 w-3.5" />
+                                  <span>Compartilhar</span>
+                                </>
+                              )}
+                            </button>
+                          </div>
+                          <div>
+                            <h3 className="font-display text-lg font-bold text-text-main group-hover:text-green-light transition-colors leading-tight">
+                              Conversor de Imagens
+                            </h3>
+                            <p className="text-xs text-text-sec mt-2 leading-relaxed font-semibold">
+                              Converta imagens entre JPG, PNG, WEBP, AVIF e BMP sem perdas de qualidade e com download em lote.
+                            </p>
+                          </div>
+                          <ul className="text-[11px] text-text-muted space-y-1.5 pt-2 font-semibold">
+                            <li className="flex items-center gap-1.5">
+                              <span className="w-1.5 h-1.5 bg-green-primary rounded-full" />
+                              Conversão em lote ultra-rápida
+                            </li>
+                            <li className="flex items-center gap-1.5">
+                              <span className="w-1.5 h-1.5 bg-green-primary rounded-full" />
+                              Suporte a JPG, PNG, WEBP, AVIF e BMP
+                            </li>
+                            <li className="flex items-center gap-1.5">
+                              <span className="w-1.5 h-1.5 bg-green-primary rounded-full" />
+                              Ajuste de qualidade e fundo transparente
+                            </li>
+                          </ul>
+                        </div>
+
+                        <div className="pt-6 flex items-center justify-between text-xs font-bold text-[#39D977] group-hover:translate-x-1 transition-transform border-t border-border-main mt-4">
+                          <span>Converter imagens</span>
+                          <ArrowRight className="h-4 w-4" />
+                        </div>
+                      </div>
+
+                      {/* Card 2: Compressor de Imagens */}
+                      <div
+                        className="bg-card-main rounded-[28px] border border-border-main p-6 md:p-8 flex flex-col justify-between shadow-sm hover:shadow-md hover:border-green-primary transition-all duration-300 group cursor-pointer relative"
+                        onClick={() => handleNavigate("imageCompressor")}
+                        id="card-image-compressor"
+                      >
+                        <div className="space-y-4">
+                          <div className="flex items-center justify-between">
+                            <div className="p-3.5 bg-[#303943] rounded-2xl border border-border-main text-[#39D977] inline-block group-hover:scale-105 transition-all shadow-inner">
+                              <Sliders className="h-6 w-6" />
+                            </div>
+                            <button
+                              type="button"
+                              onClick={(e) => handleShareTool(e, "/imagem/comprimir")}
+                              title="Compartilhar link do Compressor de Imagens"
+                              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-card-inner border border-border-main hover:border-green-primary/50 text-text-sec hover:text-green-light text-xs font-bold transition-all"
+                            >
+                              {copiedPath === "/imagem/comprimir" ? (
+                                <>
+                                  <Check className="h-3.5 w-3.5 text-green-primary" />
+                                  <span className="text-green-primary">Copiado!</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Share2 className="h-3.5 w-3.5" />
+                                  <span>Compartilhar</span>
+                                </>
+                              )}
+                            </button>
+                          </div>
+                          <div>
+                            <h3 className="font-display text-lg font-bold text-text-main group-hover:text-green-light transition-colors leading-tight">
+                              Compressor de Imagens
+                            </h3>
+                            <p className="text-xs text-text-sec mt-2 leading-relaxed font-semibold">
+                              Reduza o tamanho das suas imagens em até 80% mantendo a qualidade visual para web e armazenamento.
+                            </p>
+                          </div>
+                          <ul className="text-[11px] text-text-muted space-y-1.5 pt-2 font-semibold">
+                            <li className="flex items-center gap-1.5">
+                              <span className="w-1.5 h-1.5 bg-green-primary rounded-full" />
+                              Compressão inteligente e otimizada
+                            </li>
+                            <li className="flex items-center gap-1.5">
+                              <span className="w-1.5 h-1.5 bg-green-primary rounded-full" />
+                              Redução em KB/MB sem perda visual
+                            </li>
+                            <li className="flex items-center gap-1.5">
+                              <span className="w-1.5 h-1.5 bg-green-primary rounded-full" />
+                              Suporte a JPG, PNG e WEBP
+                            </li>
+                          </ul>
+                        </div>
+
+                        <div className="pt-6 flex items-center justify-between text-xs font-bold text-[#39D977] group-hover:translate-x-1 transition-transform border-t border-border-main mt-4">
+                          <span>Comprimir imagens</span>
+                          <ArrowRight className="h-4 w-4" />
+                        </div>
+                      </div>
+
+                      {/* Card 3: Redimensionador de Imagens */}
+                      <div
+                        className="bg-card-main rounded-[28px] border border-border-main p-6 md:p-8 flex flex-col justify-between shadow-sm hover:shadow-md hover:border-green-primary transition-all duration-300 group cursor-pointer relative"
+                        onClick={() => handleNavigate("imageResizer")}
+                        id="card-image-resizer"
+                      >
+                        <div className="space-y-4">
+                          <div className="flex items-center justify-between">
+                            <div className="p-3.5 bg-[#303943] rounded-2xl border border-border-main text-[#39D977] inline-block group-hover:scale-105 transition-all shadow-inner">
+                              <Maximize2 className="h-6 w-6" />
+                            </div>
+                            <button
+                              type="button"
+                              onClick={(e) => handleShareTool(e, "/imagem/redimensionar")}
+                              title="Compartilhar link do Redimensionador de Imagens"
+                              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-card-inner border border-border-main hover:border-green-primary/50 text-text-sec hover:text-green-light text-xs font-bold transition-all"
+                            >
+                              {copiedPath === "/imagem/redimensionar" ? (
+                                <>
+                                  <Check className="h-3.5 w-3.5 text-green-primary" />
+                                  <span className="text-green-primary">Copiado!</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Share2 className="h-3.5 w-3.5" />
+                                  <span>Compartilhar</span>
+                                </>
+                              )}
+                            </button>
+                          </div>
+                          <div>
+                            <h3 className="font-display text-lg font-bold text-text-main group-hover:text-green-light transition-colors leading-tight">
+                              Redimensionador de Imagens
+                            </h3>
+                            <p className="text-xs text-text-sec mt-2 leading-relaxed font-semibold">
+                              Altere a largura e a altura das suas imagens em pixels, porcentagem ou tamanhos prontos.
+                            </p>
+                          </div>
+                          <ul className="text-[11px] text-text-muted space-y-1.5 pt-2 font-semibold">
+                            <li className="flex items-center gap-1.5">
+                              <span className="w-1.5 h-1.5 bg-green-primary rounded-full" />
+                              Pixels, porcentagem ou redes sociais
+                            </li>
+                            <li className="flex items-center gap-1.5">
+                              <span className="w-1.5 h-1.5 bg-green-primary rounded-full" />
+                              Manter proporção de aspecto (Aspect Ratio)
+                            </li>
+                            <li className="flex items-center gap-1.5">
+                              <span className="w-1.5 h-1.5 bg-green-primary rounded-full" />
+                              Processamento em lote instantâneo
+                            </li>
+                          </ul>
+                        </div>
+
+                        <div className="pt-6 flex items-center justify-between text-xs font-bold text-[#39D977] group-hover:translate-x-1 transition-transform border-t border-border-main mt-4">
+                          <span>Redimensionar imagens</span>
+                          <ArrowRight className="h-4 w-4" />
+                        </div>
+                      </div>
+
+                      {/* Card 4: Cortar Imagem */}
+                      <div
+                        className="bg-card-main rounded-[28px] border border-border-main p-6 md:p-8 flex flex-col justify-between shadow-sm hover:shadow-md hover:border-green-primary transition-all duration-300 group cursor-pointer relative"
+                        onClick={() => handleNavigate("imageCropper")}
+                        id="card-image-cropper"
+                      >
+                        <div className="space-y-4">
+                          <div className="flex items-center justify-between">
+                            <div className="p-3.5 bg-[#303943] rounded-2xl border border-border-main text-[#39D977] inline-block group-hover:scale-105 transition-all shadow-inner">
+                              <Scissors className="h-6 w-6" />
+                            </div>
+                            <button
+                              type="button"
+                              onClick={(e) => handleShareTool(e, "/imagem/cortar")}
+                              title="Compartilhar link do Cortar Imagem"
+                              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-card-inner border border-border-main hover:border-green-primary/50 text-text-sec hover:text-green-light text-xs font-bold transition-all"
+                            >
+                              {copiedPath === "/imagem/cortar" ? (
+                                <>
+                                  <Check className="h-3.5 w-3.5 text-green-primary" />
+                                  <span className="text-green-primary">Copiado!</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Share2 className="h-3.5 w-3.5" />
+                                  <span>Compartilhar</span>
+                                </>
+                              )}
+                            </button>
+                          </div>
+                          <div>
+                            <h3 className="font-display text-lg font-bold text-text-main group-hover:text-green-light transition-colors leading-tight">
+                              Cortar Imagem
+                            </h3>
+                            <p className="text-xs text-text-sec mt-2 leading-relaxed font-semibold">
+                              Recorte fotos livremente ou gere um Pacote de Cortes em múltiplos tamanhos com ponto principal.
+                            </p>
+                          </div>
+                          <ul className="text-[11px] text-text-muted space-y-1.5 pt-2 font-semibold">
+                            <li className="flex items-center gap-1.5">
+                              <span className="w-1.5 h-1.5 bg-green-primary rounded-full" />
+                              Pacote de cortes para redes sociais
+                            </li>
+                            <li className="flex items-center gap-1.5">
+                              <span className="w-1.5 h-1.5 bg-green-primary rounded-full" />
+                              Ponto principal (Focal Point) inteligente
+                            </li>
+                            <li className="flex items-center gap-1.5">
+                              <span className="w-1.5 h-1.5 bg-green-primary rounded-full" />
+                              Exportação em ZIP ou individual
+                            </li>
+                          </ul>
+                        </div>
+
+                        <div className="pt-6 flex items-center justify-between text-xs font-bold text-[#39D977] group-hover:translate-x-1 transition-transform border-t border-border-main mt-4">
+                          <span>Cortar imagem</span>
+                          <ArrowRight className="h-4 w-4" />
+                        </div>
+                      </div>
+
+                    </div>
                   </div>
 
                   {/* Space for any other visual elements */}
@@ -876,6 +1271,58 @@ export default function App() {
                   className="bg-card-main rounded-[24px] border border-border-main shadow-lg p-6 md:p-10 text-text-main"
                 >
                   <PdfTools activeTool={activePdfTool as any} setActiveTool={setActivePdfTool as any} />
+                </motion.div>
+              )}
+
+              {activeTab === "imageConverter" && (
+                <motion.div
+                  key="image-converter-view"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  transition={{ duration: 0.2 }}
+                  className="bg-card-main rounded-[24px] border border-border-main shadow-lg p-6 md:p-10 text-text-main"
+                >
+                  <ImageConverter onNavigate={handleNavigatePath} />
+                </motion.div>
+              )}
+
+              {activeTab === "imageCompressor" && (
+                <motion.div
+                  key="image-compressor-view"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  transition={{ duration: 0.2 }}
+                  className="bg-card-main rounded-[24px] border border-border-main shadow-lg p-6 md:p-10 text-text-main"
+                >
+                  <ImageCompressor onNavigate={handleNavigatePath} />
+                </motion.div>
+              )}
+
+              {activeTab === "imageResizer" && (
+                <motion.div
+                  key="image-resizer-view"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  transition={{ duration: 0.2 }}
+                  className="bg-card-main rounded-[24px] border border-border-main shadow-lg p-6 md:p-10 text-text-main"
+                >
+                  <ImageResizer onNavigate={handleNavigatePath} />
+                </motion.div>
+              )}
+
+              {activeTab === "imageCropper" && (
+                <motion.div
+                  key="image-cropper-view"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  transition={{ duration: 0.2 }}
+                  className="bg-card-main rounded-[24px] border border-border-main shadow-lg p-6 md:p-10 text-text-main"
+                >
+                  <ImageCropper onNavigate={handleNavigatePath} />
                 </motion.div>
               )}
             </AnimatePresence>
@@ -1027,33 +1474,42 @@ export default function App() {
 
         {/* Como Funciona Section */}
         <section id="como-funciona" className="bg-card-main border border-border-main rounded-[28px] p-8 md:p-10 max-w-4xl mx-auto space-y-8">
+          {/* Seção Como Funciona */}
           <div className="text-center max-w-xl mx-auto space-y-2">
-            <h3 className="font-display text-xl md:text-2xl font-extrabold text-text-main">Como Funciona o Conversor SomDrive</h3>
-            <p className="text-xs md:text-sm text-text-sec font-semibold">Simplicidade, segurança e eficiência 100% no seu computador.</p>
+            <h3 className="font-display text-xl md:text-2xl font-extrabold text-text-main">Como Funciona</h3>
+            <p className="text-xs md:text-sm text-text-sec font-semibold">Não é necessário criar uma conta para usar as ferramentas gratuitas.</p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
             <div className="bg-card-inner border border-border-main rounded-2xl p-5 space-y-3">
               <div className="w-8 h-8 rounded-lg bg-green-primary/10 border border-green-primary/20 flex items-center justify-center text-green-primary font-extrabold text-sm">1</div>
-              <h4 className="font-display font-bold text-sm text-text-main">Adicione os Arquivos</h4>
+              <h4 className="font-display font-bold text-sm text-text-main">Selecione o arquivo</h4>
               <p className="text-xs text-text-sec leading-relaxed font-semibold">
-                Arraste seus arquivos de áudio, vídeo ou PDF para a área de upload ou selecione-os diretamente de sua máquina.
+                Escolha o arquivo de áudio, vídeo ou PDF que deseja converter ou organizar.
               </p>
             </div>
 
             <div className="bg-card-inner border border-border-main rounded-2xl p-5 space-y-3">
               <div className="w-8 h-8 rounded-lg bg-green-primary/10 border border-green-primary/20 flex items-center justify-center text-green-primary font-extrabold text-sm">2</div>
-              <h4 className="font-display font-bold text-sm text-text-main">Ajuste as Opções</h4>
+              <h4 className="font-display font-bold text-sm text-text-main">Escolha o formato ou ferramenta</h4>
               <p className="text-xs text-text-sec leading-relaxed font-semibold">
-                Escolha o formato e a qualidade desejados ou selecione a ferramenta que deseja aplicar.
+                Selecione a opção desejada para seu arquivo.
               </p>
             </div>
 
             <div className="bg-card-inner border border-border-main rounded-2xl p-5 space-y-3">
               <div className="w-8 h-8 rounded-lg bg-green-primary/10 border border-green-primary/20 flex items-center justify-center text-green-primary font-extrabold text-sm">3</div>
-              <h4 className="font-display font-bold text-sm text-text-main">Baixe o Resultado</h4>
+              <h4 className="font-display font-bold text-sm text-text-main">Ajuste as opções</h4>
               <p className="text-xs text-text-sec leading-relaxed font-semibold">
-                Inicie o processamento no navegador e faça o download instantâneo do seu novo arquivo otimizado.
+                Defina a qualidade ou a ordem que preferir.
+              </p>
+            </div>
+
+            <div className="bg-card-inner border border-border-main rounded-2xl p-5 space-y-3">
+              <div className="w-8 h-8 rounded-lg bg-green-primary/10 border border-green-primary/20 flex items-center justify-center text-green-primary font-extrabold text-sm">4</div>
+              <h4 className="font-display font-bold text-sm text-text-main">Converta e baixe</h4>
+              <p className="text-xs text-text-sec leading-relaxed font-semibold">
+                Acompanhe o processo e baixe seu arquivo final na hora.
               </p>
             </div>
           </div>
@@ -1113,13 +1569,15 @@ export default function App() {
       {/* Footer */}
       <footer className="bg-bg-sec text-text-sec py-10 px-4 md:px-8 border-t border-border-main">
         <div className="max-w-[1220px] mx-auto flex flex-col md:flex-row items-center justify-between gap-4 text-[13px] text-center md:text-left">
-          <p id="footer-text-left" className="text-text-sec font-semibold">
-            &copy; {new Date().getFullYear()} Conversor SomDrive. Ferramentas para áudio e PDF.
-          </p>
+          <div className="space-y-1">
+            <p id="footer-text-left" className="text-text-main font-bold">
+              Conversor SomDrive — Ferramentas online para áudio, vídeo e PDF.
+            </p>
+            <p className="text-xs text-text-sec font-medium">
+              Os arquivos utilizados nas ferramentas não ficam salvos após o encerramento da sessão.
+            </p>
+          </div>
           <div className="flex flex-col items-center md:items-end gap-1" id="footer-links">
-            <span className="text-text-sec font-semibold" id="footer-link-tech">
-              Tecnologias: Web Audio, Web Workers e pdf-lib
-            </span>
             {/* Invisible secret area for Admin login link */}
             <div className="group/admin py-0.5">
               <button

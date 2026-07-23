@@ -16,6 +16,7 @@ import { analyzeVideoFile, VideoMetadata } from "../services/video/videoAnalyzer
 import { extractAudioFromVideo, ExtractedAudioData } from "../services/video/videoAudioExtractor";
 import { encodeMp3InWorker } from "../services/video/mp3EncoderService";
 import { encodeWavBuffer } from "../services/video/wavEncoderService";
+import { trackEvent } from "../lib/gtag";
 
 interface VideoToAudioProps {
   onBack?: () => void;
@@ -100,6 +101,11 @@ export default function VideoToAudio({ onBack, onNavigateTab }: VideoToAudioProp
     setProgressStage("Analisando vídeo...");
     isCancelledRef.current = false;
 
+    trackEvent("video_audio_started", {
+      output_format: config.format,
+      quality: config.format === "mp3" ? `${config.mp3Kbps}k` : config.wavSampleRate
+    });
+
     try {
       // Step 1 & 2: Extract audio track to PCM
       const audioData: ExtractedAudioData = await extractAudioFromVideo(
@@ -174,10 +180,18 @@ export default function VideoToAudio({ onBack, onNavigateTab }: VideoToAudioProp
         qualityChosen
       });
 
+      trackEvent("video_audio_completed", {
+        output_format: config.format,
+        quality: qualityChosen
+      });
+
       setProgressPercent(100);
       setProgressStage("Concluído");
     } catch (err: any) {
       if (err.message !== "Cancelado pelo usuário" && err.message !== "Operação cancelada pelo usuário.") {
+        trackEvent("video_audio_failed", {
+          output_format: config.format
+        });
         alert("Erro na conversão: " + err.message);
       }
     } finally {
@@ -250,10 +264,10 @@ export default function VideoToAudio({ onBack, onNavigateTab }: VideoToAudioProp
         {/* Main Title & Subtitle */}
         <div className="text-center space-y-2 max-w-2xl mx-auto pt-2">
           <h1 className="text-2xl md:text-3xl font-black text-text-main font-display uppercase tracking-tight">
-            CONVERSOR DE VÍDEO PARA ÁUDIO
+            VÍDEO PARA ÁUDIO
           </h1>
           <p className="text-xs md:text-sm text-text-sec font-semibold leading-relaxed">
-            Extraia o áudio de vídeos MP4, MOV, M4V e WebM para MP3 ou WAV diretamente no navegador.
+            Extraia o áudio de vídeos MP4, MOV, M4V e WebM e baixe o resultado em MP3 ou WAV.
           </p>
         </div>
 
@@ -263,37 +277,36 @@ export default function VideoToAudio({ onBack, onNavigateTab }: VideoToAudioProp
             <div className="space-y-1">
               <h2 className="font-extrabold text-base md:text-lg text-text-main flex items-center gap-2">
                 <Sparkles className="h-5 w-5 text-green-primary" />
-                Extraia o áudio com processamento 100% local
+                Extraia o áudio com facilidade
               </h2>
               <p className="text-xs text-text-sec font-medium">
-                Transforme vídeos do seu computador em arquivos MP3 ou WAV com alta qualidade, sem enviar nada para servidores.
+                Transforme vídeos em arquivos de áudio MP3 ou WAV com alta qualidade e rapidez.
               </p>
             </div>
           </div>
 
           {/* Benefícios visíveis */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 pt-1 text-xs">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 pt-1 text-xs">
             <div className="flex items-center gap-2 bg-card-inner border border-border-main px-3 py-2 rounded-xl text-text-sec font-semibold">
               <ShieldCheck className="h-4 w-4 text-green-primary shrink-0" />
-              <span>MP4, MOV, M4V e WebM</span>
+              <span>MP3 ou WAV</span>
             </div>
             <div className="flex items-center gap-2 bg-card-inner border border-border-main px-3 py-2 rounded-xl text-text-sec font-semibold">
               <FileAudio className="h-4 w-4 text-green-primary shrink-0" />
-              <span>Saída MP3 ou WAV</span>
+              <span>Escolha de qualidade</span>
             </div>
             <div className="flex items-center gap-2 bg-card-inner border border-border-main px-3 py-2 rounded-xl text-text-sec font-semibold">
               <Monitor className="h-4 w-4 text-green-primary shrink-0" />
-              <span>Processamento no navegador</span>
+              <span>Processo rápido</span>
             </div>
             <div className="flex items-center gap-2 bg-card-inner border border-border-main px-3 py-2 rounded-xl text-text-sec font-semibold">
               <Film className="h-4 w-4 text-green-primary shrink-0" />
-              <span>Arquivos grandes no PC</span>
-            </div>
-            <div className="flex items-center gap-2 bg-card-inner border border-border-main px-3 py-2 rounded-xl text-text-sec font-semibold col-span-1 sm:col-span-2 md:col-span-2">
-              <ShieldCheck className="h-4 w-4 text-green-primary shrink-0" />
-              <span>Sem armazenamento nem upload em servidores</span>
+              <span>Download na hora</span>
             </div>
           </div>
+          <p className="text-[11px] text-green-primary font-semibold text-center pt-1">
+            🔒 Seus arquivos não ficam salvos.
+          </p>
         </div>
       </div>
 
@@ -393,7 +406,7 @@ export default function VideoToAudio({ onBack, onNavigateTab }: VideoToAudioProp
           <div className="bg-card-main/40 border border-border-main/50 rounded-2xl p-4 text-center space-y-1 max-w-2xl mx-auto">
             <p className="text-xs text-text-sec flex items-center justify-center gap-2">
               <ShieldCheck className="h-4 w-4 text-green-primary shrink-0" />
-              <span>Seu vídeo é processado diretamente no navegador do seu computador. O arquivo não é enviado nem armazenado em nossos servidores.</span>
+              <span>Não guardamos seus arquivos. Ao fechar ou atualizar a página, o conteúdo da conversão é descartado.</span>
             </p>
           </div>
         </div>

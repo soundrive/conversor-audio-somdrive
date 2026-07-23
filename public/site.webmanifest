@@ -1,7 +1,11 @@
 {
-  "name": "SomLeve 96 | Conversor de Áudio",
-  "short_name": "SomLeve 96",
-  "description": "Converta arquivos de áudio para MP3 96 kbps diretamente no seu dispositivo.",
+  "name": "Som Leve | Conversor de Áudio",
+  "short_name": "Som Leve",
+  "description": "Conversor de áudio para MP3 96 kbps, rápido, leve e processado diretamente no dispositivo.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#020617",
+  "theme_color": "#10b981",
   "icons": [
     {
       "src": "/android-chrome-192x192.png",
@@ -13,8 +17,5 @@
       "sizes": "512x512",
       "type": "image/png"
     }
-  ],
-  "theme_color": "#10b981",
-  "background_color": "#020817",
-  "display": "standalone"
+  ]
 }
