@@ -10,5 +10,6 @@ Allow: /organizar-pdf
 # Bloquear rotas administrativas e privadas
 Disallow: /admin
 Disallow: /admin-login
+Disallow: /imagem/remover-fundo
 
 Sitemap: https://somdrive.com/sitemap.xml

@@ -100,26 +100,36 @@ export default async function handler(req: any, res: any) {
 
     // Update ad document
     const adRef = doc(db, "ads", cleanAdId);
-    await updateDoc(adRef, {
-      clickCount: increment(1),
-      lastClickedAt: nowIso
-    }).catch(async (err: any) => {
-      // If document didn't have clickCount field initially, setDoc merge
-      await setDoc(adRef, {
+    try {
+      await updateDoc(adRef, {
         clickCount: increment(1),
         lastClickedAt: nowIso
-      }, { merge: true });
-    });
+      });
+    } catch (err: any) {
+      // If document didn't have clickCount field initially or updateDoc failed, setDoc merge
+      try {
+        await setDoc(adRef, {
+          clickCount: increment(1),
+          lastClickedAt: nowIso
+        }, { merge: true });
+      } catch (innerErr) {
+        console.warn("[ADS_TRACK_CLICK] Non-critical warning updating ad click count:", innerErr);
+      }
+    }
 
     // Update daily stats document ad_click_stats/{adId_YYYY-MM-DD}
-    const statRef = doc(db, "ad_click_stats", statDocId);
-    await setDoc(statRef, {
-      adId: cleanAdId,
-      date: todayStr,
-      clickCount: increment(1),
-      position: cleanPosition,
-      updatedAt: nowIso
-    }, { merge: true });
+    try {
+      const statRef = doc(db, "ad_click_stats", statDocId);
+      await setDoc(statRef, {
+        adId: cleanAdId,
+        date: todayStr,
+        clickCount: increment(1),
+        position: cleanPosition,
+        updatedAt: nowIso
+      }, { merge: true });
+    } catch (statErr) {
+      console.warn("[ADS_TRACK_CLICK] Non-critical warning updating ad_click_stats:", statErr);
+    }
 
     return res.status(200).json({
       success: true,
