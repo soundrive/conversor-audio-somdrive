@@ -324,8 +324,9 @@ const app = express();
 
 const PORT = 3000;
 
-// Body parser
-app.use(express.json());
+// Body parser (50mb limit for test payloads)
+app.use(express.json({ limit: "50mb" }));
+app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 
   // API Route: Generate presigned upload URL
   app.post("/api/ads-presigned-upload", requireAdminMiddleware, async (req, res) => {
